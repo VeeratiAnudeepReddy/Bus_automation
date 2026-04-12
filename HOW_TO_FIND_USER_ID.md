@@ -1,0 +1,201 @@
+# 🔍 How to Find Your User ID
+
+There are **4 ways** to see your User ID in the BusQR app:
+
+---
+
+## ✅ Method 1: Register Page (Easiest)
+
+### Steps:
+1. Go to http://localhost:3000/register
+2. Fill in the registration form:
+   - Name
+   - Email  
+   - Phone
+3. Click "Register"
+4. **Your User ID will be displayed** on the screen with a "Copy to Clipboard" button
+
+**Visual:**
+```
+┌─────────────────────────────────────┐
+│  ✅ Registration Successful!        │
+│                                     │
+│  Your User ID:                      │
+│  ┌──────────────────────────────┐  │
+│  │ 69d33eb2ed04493999e099a5     │  │
+│  │ [📋 Copy to Clipboard]       │  │
+│  └──────────────────────────────┘  │
+└─────────────────────────────────────┘
+```
+
+---
+
+## ✅ Method 2: Browser Console (Quick Check)
+
+### Steps:
+1. Open http://localhost:3000
+2. Press **F12** (or right-click → Inspect)
+3. Go to **Console** tab
+4. Type:
+   ```javascript
+   localStorage.getItem('currentUserId')
+   ```
+5. Press Enter
+6. Your User ID will be displayed
+
+**Example Output:**
+```
+"69d33eb2ed04493999e099a5"
+```
+
+---
+
+## ✅ Method 3: Browser DevTools Storage
+
+### Steps:
+1. Open http://localhost:3000
+2. Press **F12** (or right-click → Inspect)
+3. Go to **Application** tab (Chrome) or **Storage** tab (Firefox)
+4. Expand **Local Storage** → http://localhost:3000
+5. Look for key: `currentUserId`
+6. The value is your User ID
+
+**Screenshot Path:**
+```
+DevTools → Application → Local Storage → localhost:3000
+├── currentUserId: "69d33eb2ed04493999e099a5"
+```
+
+---
+
+## ✅ Method 4: Backend API (All Users)
+
+### Steps:
+1. Open terminal
+2. Run this command:
+   ```bash
+   curl http://localhost:5001/api/users
+   ```
+3. You'll see a list of all registered users with their IDs
+
+**Example Output:**
+```json
+{
+  "total": 2,
+  "users": [
+    {
+      "_id": "69d33eb2ed04493999e099a5",
+      "name": "John Doe",
+      "email": "john@example.com",
+      "phone": "1234567890",
+      "balance": 100,
+      "createdAt": "2026-04-06T05:03:46.467Z"
+    },
+    {
+      "_id": "69d33e6eed04493999e099a3",
+      "name": "Jane Smith",
+      "email": "jane@example.com",
+      "phone": "9876543210",
+      "balance": 50,
+      "createdAt": "2026-04-06T05:02:38.060Z"
+    }
+  ]
+}
+```
+
+The `_id` field is your User ID.
+
+---
+
+## 🔍 Where User ID is Used
+
+### Ticket Generation
+- Go to http://localhost:3000 (Home/Ticket page)
+- The User ID field is **auto-filled** from localStorage
+- If not, you can manually enter it
+
+### Recharge
+- Go to http://localhost:3000/recharge
+- User ID field is **auto-filled**
+- Used to add money to your wallet
+
+### Scanner
+- When you scan a QR code
+- The system validates the ticket and shows the user who owns it
+
+---
+
+## 💡 Pro Tips
+
+### Auto-Save Feature
+✅ After registering, your User ID is **automatically saved** to browser localStorage
+✅ It will **auto-fill** on the Ticket and Recharge pages
+✅ You don't need to remember or copy it manually
+
+### Copy to Clipboard
+✅ On the Register page, click the **"Copy to Clipboard"** button
+✅ Paste it anywhere you need (notes, messages, etc.)
+
+### Multiple Devices
+⚠️ User ID is stored in **browser localStorage** (device-specific)
+⚠️ If you use a different device/browser, you'll need to:
+   - Find it using Method 4 (API) or
+   - Re-register if it's a new account
+
+---
+
+## 🆘 Troubleshooting
+
+### "User ID not found in localStorage"
+**Solution:**
+1. Register a new user at /register
+2. Or use Method 4 to find existing User IDs
+
+### "User ID field is empty on Ticket page"
+**Solution:**
+1. Register first at /register
+2. Or manually paste your User ID
+3. Check browser console for errors (F12)
+
+### "Invalid User ID" error
+**Possible Causes:**
+- User ID format is incorrect (must be 24 characters)
+- User doesn't exist in database
+- Check API: `curl http://localhost:5001/api/users`
+
+---
+
+## 📝 Quick Reference
+
+| Method | Where | How |
+|--------|-------|-----|
+| **Register Page** | /register | After registration, displayed on screen |
+| **Console** | Browser DevTools | `localStorage.getItem('currentUserId')` |
+| **Storage** | Browser DevTools | Application → Local Storage |
+| **API** | Terminal/Postman | `GET /api/users` |
+
+---
+
+## 🎯 Recommended Flow
+
+```
+1. Sign Up (Clerk) → Create auth account
+2. Register → Get User ID (auto-saved)
+3. Recharge → Use auto-filled User ID
+4. Generate Ticket → Use auto-filled User ID
+5. Scan → Validate ticket
+```
+
+---
+
+## ✅ Example User ID Format
+
+Valid User ID: `69d33eb2ed04493999e099a5`
+
+- Length: 24 characters
+- Format: Hexadecimal string
+- Generated by: MongoDB (ObjectId)
+
+---
+
+**Need Help?** See FINAL_STATUS.md for complete system documentation.

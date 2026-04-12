@@ -1,0 +1,99 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #111827;
+}
+
+@theme inline {
+  --color-primary: #ff7a00;
+  --color-secondary: #6b7280;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: 'Inter', system-ui, sans-serif;
+  
+  --animate-fade-in: fadeIn 0.5s ease-in-out;
+  --animate-scale-in: scaleIn 0.3s ease-in-out;
+  --animate-pulse-glow: pulseGlow 2s ease-in-out infinite;
+  
+  @keyframes fadeIn {
+    0% { opacity: 0; transform: translateY(10px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  
+  @keyframes scaleIn {
+    0% { transform: scale(0.95); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  
+  @keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 0 20px rgba(255, 122, 0, 0.5); }
+    50% { box-shadow: 0 0 40px rgba(255, 122, 0, 0.8); }
+  }
+}
+
+body {
+  background: linear-gradient(to bottom right, #f9fafb, #ffffff, #f3f4f6);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+}
+
+@layer components {
+  .glass-card {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  }
+  
+  .btn-primary {
+    background: var(--color-primary);
+    color: white;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    transform: scale(1);
+  }
+  
+  .btn-primary:hover:not(:disabled) {
+    background: #e66d00;
+    transform: scale(1.05);
+  }
+  
+  .btn-primary:active:not(:disabled) {
+    transform: scale(0.95);
+  }
+  
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  .input-field {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border-radius: 0.75rem;
+    border: 2px solid #e5e7eb;
+    outline: none;
+    transition: all 0.2s ease;
+  }
+  
+  .input-field:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(255, 122, 0, 0.1);
+  }
+}
+
+.scanner-box {
+  border: 3px solid var(--color-primary);
+  animation: var(--animate-pulse-glow);
+}
+
+.animate-fade-in {
+  animation: var(--animate-fade-in);
+}
+
+.animate-scale-in {
+  animation: var(--animate-scale-in);
+}

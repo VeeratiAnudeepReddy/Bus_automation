@@ -1,0 +1,170 @@
+{
+  "info": {
+    "name": "QR Bus Ticketing System",
+    "description": "API collection for QR Code-based Bus Ticketing System",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Register User",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"John Doe\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:5001/api/register",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5001",
+          "path": ["api", "register"]
+        }
+      }
+    },
+    {
+      "name": "2. Recharge Wallet",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userId\": \"<REPLACE_WITH_USER_ID>\",\n  \"amount\": 100\n}"
+        },
+        "url": {
+          "raw": "http://localhost:5001/api/recharge",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5001",
+          "path": ["api", "recharge"]
+        }
+      }
+    },
+    {
+      "name": "3. Generate Ticket",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userId\": \"<REPLACE_WITH_USER_ID>\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:5001/api/generate-ticket",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5001",
+          "path": ["api", "generate-ticket"]
+        }
+      }
+    },
+    {
+      "name": "4. Validate Ticket - First Time (VALID)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"ticketId\": \"<REPLACE_WITH_TICKET_ID>\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:5001/api/validate",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5001",
+          "path": ["api", "validate"]
+        }
+      }
+    },
+    {
+      "name": "5. Validate Ticket - Second Time (ALREADY_USED)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"ticketId\": \"<REPLACE_WITH_SAME_TICKET_ID>\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:5001/api/validate",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5001",
+          "path": ["api", "validate"]
+        }
+      }
+    },
+    {
+      "name": "6. Validate Random Ticket (INVALID)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"ticketId\": \"random-invalid-ticket-id-12345\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:5001/api/validate",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5001",
+          "path": ["api", "validate"]
+        }
+      }
+    },
+    {
+      "name": "7. Generate Ticket with Insufficient Balance",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userId\": \"<USER_ID_WITH_LOW_BALANCE>\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:5001/api/generate-ticket",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5001",
+          "path": ["api", "generate-ticket"]
+        }
+      }
+    }
+  ]
+}

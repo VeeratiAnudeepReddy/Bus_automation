@@ -1,16 +1,16 @@
 # BusQR Frontend
 
-Modern Next.js application for QR Code-based Bus Ticketing System with Clerk authentication.
+Mobile-first Next.js application for BusQR smart QR bus ticketing with Clerk authentication.
 
 ## ✨ Features
 
 - 🔐 **Authentication** - Clerk-powered sign in/up
-- 🎫 **Generate QR Tickets** - Create unique QR codes
-- 📷 **Scan & Validate** - Camera-based ticket validation
-- 💰 **Wallet Management** - Recharge and track balance
-- 👤 **User Registration** - Local user system
-- 🎨 **Premium Design** - Glassmorphism UI
-- 📱 **Fully Responsive** - Works on all devices
+- 🎫 **Generate QR Tickets** - Create and view digital tickets
+- 📷 **Scan & Validate** - Conductor scanner with valid/used/invalid states
+- 💰 **Wallet Management** - Recharge and view transaction history
+- 👤 **User Registration** - Profile setup + wallet initialization
+- 🎨 **Premium Mobile UI** - Clean grayscale + orange accent
+- 📱 **Mobile First** - iPhone-like layout and bottom tabs
 
 ## 🛠️ Tech Stack
 
@@ -71,17 +71,23 @@ npm start
 ```
 frontend/
 ├── app/
-│   ├── layout.tsx          # Root layout with Navbar + ClerkProvider
-│   ├── page.tsx            # Home (ticket generation)
-│   ├── scanner/page.tsx    # QR scanner
-│   ├── register/page.tsx   # User registration
-│   ├── recharge/page.tsx   # Wallet recharge
-│   └── globals.css         # Tailwind + custom styles
+│   ├── layout.tsx                # Root layout + Clerk + toasts
+│   ├── page.tsx                  # Home
+│   ├── register/page.tsx         # Registration
+│   ├── wallet/page.tsx           # Wallet
+│   ├── generate/page.tsx         # Generate ticket
+│   ├── tickets/page.tsx          # Ticket history
+│   ├── tickets/[ticketId]/page.tsx # QR ticket details
+│   ├── scanner/page.tsx          # Camera scanner
+│   └── globals.css               # Global styling
 ├── components/
-│   ├── Navbar.tsx          # Navigation with Clerk auth UI
-│   ├── Card.tsx            # Glass card component
-│   ├── Button.tsx          # Primary button
-│   └── Input.tsx           # Styled input field
+│   ├── Navbar.tsx
+│   ├── BottomTabBar.tsx
+│   ├── WalletCard.tsx
+│   ├── TicketCard.tsx
+│   ├── QRCard.tsx
+│   ├── ScannerCard.tsx
+│   └── ActionButton.tsx
 ├── lib/
 │   └── api.ts              # API service layer
 ├── proxy.ts                # Clerk middleware
@@ -114,11 +120,11 @@ All components follow the glassmorphism design pattern with:
 
 The app connects to the backend API with these endpoints:
 
-- `POST /register` - Create new user
-- `POST /recharge` - Add balance to wallet
-- `POST /generate-ticket` - Generate QR ticket
-- `POST /validate` - Validate scanned ticket
-- `GET /user/:id` - Get user details
+- `POST /auth/sync` - Register/sync user
+- `POST /wallet/add` - Recharge wallet
+- `POST /tickets/book` - Generate ticket(s)
+- `GET /tickets/my` - Wallet balance + ticket history
+- `POST /tickets/scan` - Validate scanned ticket (admin only)
 
 See [backend/API_SUMMARY.md](../backend/API_SUMMARY.md) for complete API reference.
 
@@ -127,7 +133,7 @@ See [backend/API_SUMMARY.md](../backend/API_SUMMARY.md) for complete API referen
 1. **Sign Up** (Clerk) → Authenticate with email/social
 2. **Register** (Local) → Create bus system user account
 3. **Recharge** → Add balance to wallet
-4. **Generate Ticket** → Create QR code (₹10 deducted)
+4. **Generate Ticket** → Create QR code (₹20 deducted)
 5. **Scan** → Validate ticket at bus entrance
 
 ## 🔐 Authentication

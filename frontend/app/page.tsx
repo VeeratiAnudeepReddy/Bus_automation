@@ -1,80 +1,143 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { SignInButton, SignUpButton } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
-import { SignInButton, SignUpButton, useUser } from '@clerk/nextjs';
-import { apiService, AppUser } from '@/lib/api';
+import { useEffect, useState } from 'react';
+import { QrCode, Ticket, Wallet } from 'lucide-react';
+import PageShell from '@/components/PageShell';
+import WalletCard from '@/components/WalletCard';
+import LoadingSkeleton from '@/components/LoadingSkeleton';
+import { apiService, TicketItem } from '@/lib/api';
+import { formatDateTime } from '@/lib/format';
+import { useAppRole } from '@/lib/useAppRole';
 
-export default function Home() {
+export default function HomePage() {
   const router = useRouter();
-  const { isLoaded, user } = useUser();
-  const [error, setError] = useState('');
+  const { isLoaded, user, role, ready } = useAppRole();
+  const [loading, setLoading] = useState(true);
+  const [balance, setBalance] = useState(0);
+  const [tickets, setTickets] = useState<TicketItem[]>([]);
 
   useEffect(() => {
-    const syncAndRoute = async () => {
-      if (!isLoaded || !user) {
+    const load = async () => {
+      if (!isLoaded) {
+        return;
+      }
+
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      if (role === 'admin') {
+        setLoading(false);
         return;
       }
 
       try {
-        const appUser: AppUser = await apiService.syncUser({
-          clerkUserId: user.id,
-          name: user.fullName || 'Bus User',
-          email: user.primaryEmailAddress?.emailAddress || '',
-          phone: user.primaryPhoneNumber?.phoneNumber
-        });
-
-        if (appUser.role === 'admin') {
-          router.replace('/admin');
-          return;
-        }
-
-        router.replace('/dashboard');
+        const data = await apiService.getMyTickets(user.id);
+        setBalance(data.balance);
+        setTickets(data.tickets.slice(0, 3));
       } catch {
-        setError('Failed to initialize your account. Please try again.');
+        window.location.href = '/register';
+        setLoading(false);
+        return;
       }
+
+      setLoading(false);
     };
 
-    void syncAndRoute();
-  }, [isLoaded, user, router]);
+    void load();
+  }, [isLoaded, role, user]);
 
-  if (!isLoaded) {
+  useEffect(() => {
+    if (ready && role === 'admin') {
+      router.replace('/admin');
+    }
+  }, [ready, role, router]);
+
+  if (!isLoaded || !ready || loading) {
     return (
-      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
-        <div className="text-gray-600">Loading...</div>
-      </div>
+      <PageShell showTabs={false}>
+        <LoadingSkeleton className="h-28" />
+        <LoadingSkeleton className="h-24" />
+        <LoadingSkeleton className="h-24" />
+      </PageShell>
     );
   }
 
   if (!user) {
     return (
-      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-6 bg-white">
-        <div className="w-full max-w-xl rounded-2xl border border-orange-200 p-8 text-center shadow-sm">
-          <h1 className="text-4xl font-bold text-gray-900">Bus Ticketing</h1>
-          <p className="mt-3 text-gray-600">
-            Sign in with Google (Clerk) to continue to your dashboard.
-          </p>
-          <div className="mt-6 flex items-center justify-center gap-3">
+      <PageShell showTabs={false}>
+        <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <h1 className="text-2xl font-semibold text-zinc-900">BusQR</h1>
+          <p className="mt-2 text-sm text-zinc-600">Smart QR Code Bus Ticketing System</p>
+          <div className="mt-5 grid gap-3">
             <SignInButton mode="modal">
-              <button className="px-5 py-3 rounded-lg bg-orange-500 text-white font-semibold hover:bg-orange-600">
+              <button className="rounded-xl bg-black px-4 py-3 text-sm font-medium text-white">
                 Sign In
               </button>
             </SignInButton>
             <SignUpButton mode="modal">
-              <button className="px-5 py-3 rounded-lg border border-orange-300 text-orange-700 font-semibold hover:bg-orange-50">
-                Sign Up
+              <button className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900">
+                Create Account
               </button>
             </SignUpButton>
           </div>
-          {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
         </div>
-      </div>
-    );
+      </PageShell>
+      );
   }
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
-      <p className="text-gray-600">Redirecting...</p>
-    </div>
+    <PageShell>
+      <section className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <p className="text-sm text-zinc-500">Welcome</p>
+        <h2 className="text-xl font-semibold text-zinc-900">{user.fullName || 'Bus User'}</h2>
+        <div className="mt-4">
+          <WalletCard balance={balance} />
+          <Link
+            href="/wallet"
+            className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-black px-4 py-3 text-sm font-medium text-white"
+          >
+            Recharge Wallet
+          </Link>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-2 gap-3">
+        <Link href="/generate" className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+          <QrCode className="text-black" size={20} />
+          <p className="mt-2 text-sm font-medium text-zinc-900">Generate QR Ticket</p>
+        </Link>
+        <Link href="/tickets" className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+          <Ticket className="text-black" size={20} />
+          <p className="mt-2 text-sm font-medium text-zinc-900">View My Tickets</p>
+        </Link>
+      </section>
+
+      <section className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <div className="mb-3 flex items-center gap-2">
+          <Wallet size={16} className="text-zinc-500" />
+          <h3 className="text-sm font-semibold text-zinc-900">Recent Activity</h3>
+        </div>
+        {tickets.length === 0 ? (
+          <p className="text-sm text-zinc-500">No recent activity yet.</p>
+        ) : (
+          <div className="space-y-3">
+            {tickets.map((ticket) => (
+              <div key={ticket.ticketId} className="flex items-center justify-between text-sm">
+                <div>
+                  <p className="font-medium text-zinc-900">Ticket Purchased</p>
+                  <p className="text-xs text-zinc-500">{formatDateTime(ticket.createdAt)}</p>
+                </div>
+                <span className="font-medium text-zinc-800">-₹20</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </PageShell>
   );
 }

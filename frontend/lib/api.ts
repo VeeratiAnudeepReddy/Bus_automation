@@ -24,6 +24,7 @@ export type TicketItem = {
   ticketId: string;
   userId: string;
   status: 'ACTIVE' | 'USED';
+  fare?: number;
   createdAt: string;
   scannedAt: string | null;
   qrPayload: {
@@ -39,6 +40,7 @@ export type ScanResult = {
   ticket?: {
     ticketId: string;
     userId: string;
+    passengerName?: string;
     status: 'USED';
     scannedAt: string;
     createdAt: string;
@@ -90,9 +92,8 @@ export const apiService = {
   getAdminAnalytics: async (
     clerkUserId: string
   ): Promise<{
-    totalTicketsSold: number;
-    totalTicketsUsed: number;
-    dailyStats: { _id: string; sold: number; used: number }[];
+    totalScannedTickets: number;
+    dailyScannedStats: { _id: string; scanned: number }[];
   }> => {
     const response = await api.get('/admin/analytics', authHeaders(clerkUserId));
     return response.data;

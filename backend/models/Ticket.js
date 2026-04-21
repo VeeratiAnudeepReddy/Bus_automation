@@ -28,6 +28,12 @@ const ticketSchema = new mongoose.Schema(
       type: Date,
       default: null
     },
+    scannedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true
+    },
     qrPayload: {
       ticketId: {
         type: String,
@@ -49,5 +55,6 @@ const ticketSchema = new mongoose.Schema(
 );
 
 ticketSchema.index({ userId: 1, createdAt: -1 });
+ticketSchema.index({ scannedBy: 1, scannedAt: -1 });
 
 module.exports = mongoose.model('Ticket', ticketSchema);

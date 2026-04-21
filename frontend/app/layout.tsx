@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Navbar from "@/components/Navbar";
 import { ClerkProvider } from "@clerk/nextjs";
+import { Toaster } from "react-hot-toast";
 
 export const metadata: Metadata = {
   title: "BusQR - Smart Bus Ticketing",
@@ -15,12 +15,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full">
         <ClerkProvider>
-          <Navbar />
-          <main className="flex-1">
-            {children}
-          </main>
+          {children}
+          <Toaster position="top-center" />
         </ClerkProvider>
       </body>
     </html>

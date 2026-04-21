@@ -1,21 +1,39 @@
 const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
 const QRCode = require('qrcode');
+const config = require('../config');
 const User = require('../models/User');
 const Ticket = require('../models/Ticket');
 
-const TICKET_PRICE = 20;
+const TICKET_PRICE = Number(config.FARE) || 20;
 const MAX_TICKETS_PER_BOOKING = 20;
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const uuidExtractRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 const parseTicketIdFromScan = (input) => {
   if (!input || typeof input !== 'string') {
     return null;
   }
 
+  const trimmedInput = input.trim();
+  if (uuidRegex.test(trimmedInput)) {
+    return trimmedInput;
+  }
+
+  const directMatch = trimmedInput.match(uuidExtractRegex);
+  if (directMatch) {
+    return directMatch[0];
+  }
+
   try {
-    const parsed = JSON.parse(input);
+    const parsed = JSON.parse(trimmedInput);
     if (parsed && typeof parsed.ticketId === 'string') {
-      return parsed.ticketId;
+      const parsedTicketId = parsed.ticketId.trim();
+      if (uuidRegex.test(parsedTicketId)) {
+        return parsedTicketId;
+      }
+      const parsedMatch = parsedTicketId.match(uuidExtractRegex);
+      return parsedMatch ? parsedMatch[0] : null;
     }
   } catch {
     return null;
@@ -91,6 +109,7 @@ exports.bookTickets = async (req, res) => {
         ticketId: ticket.ticketId,
         userId: ticket.userId,
         status: ticket.status,
+        fare: ticket.fare,
         createdAt: ticket.createdAt,
         qrPayload: ticket.qrPayload,
         qr: qrImages[index]
@@ -125,6 +144,7 @@ exports.getMyTickets = async (req, res) => {
         ticketId: ticket.ticketId,
         userId: ticket.userId,
         status: ticket.status,
+        fare: ticket.fare,
         createdAt: ticket.createdAt,
         scannedAt: ticket.scannedAt,
         qrPayload: ticket.qrPayload,
@@ -158,14 +178,18 @@ exports.scanTicket = async (req, res) => {
     const scannedAt = new Date();
     const updated = await Ticket.findOneAndUpdate(
       { ticketId, status: 'ACTIVE' },
-      { $set: { status: 'USED', scannedAt } },
+      { $set: { status: 'USED', scannedAt, scannedBy: req.user._id } },
       { new: true, select: 'ticketId userId status scannedAt createdAt' }
     ).lean();
 
     if (updated) {
+      const ticketUser = await User.findById(updated.userId).select('name').lean();
       return res.status(200).json({
         result: 'VALID',
-        ticket: updated
+        ticket: {
+          ...updated,
+          passengerName: ticketUser?.name || null
+        }
       });
     }
 

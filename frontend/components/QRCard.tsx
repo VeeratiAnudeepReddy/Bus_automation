@@ -22,6 +22,11 @@ export default function QRCard({ ticket, passengerName, status }: Props) {
         <p>
           <span className="text-zinc-500">Ticket ID:</span> {ticket.ticketId}
         </p>
+        {ticket.from && ticket.to ? (
+          <p>
+            <span className="text-zinc-500">Route:</span> {ticket.from} → {ticket.to}
+          </p>
+        ) : null}
         <p>
           <span className="text-zinc-500">Fare:</span> {formatCurrency(ticket.fare ?? BUS_FARE)}
         </p>

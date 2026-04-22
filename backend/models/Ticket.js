@@ -14,6 +14,22 @@ const ticketSchema = new mongoose.Schema(
       required: true,
       index: true
     },
+    routeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Route',
+      default: null,
+      index: true
+    },
+    from: {
+      type: String,
+      default: null,
+      trim: true
+    },
+    to: {
+      type: String,
+      default: null,
+      trim: true
+    },
     status: {
       type: String,
       enum: ['ACTIVE', 'USED'],
@@ -34,6 +50,14 @@ const ticketSchema = new mongoose.Schema(
       default: null,
       index: true
     },
+    fromCoords: {
+      lat: { type: Number, default: null },
+      lng: { type: Number, default: null }
+    },
+    toCoords: {
+      lat: { type: Number, default: null },
+      lng: { type: Number, default: null }
+    },
     qrPayload: {
       ticketId: {
         type: String,
@@ -46,6 +70,22 @@ const ticketSchema = new mongoose.Schema(
       timestamp: {
         type: String,
         required: true
+      },
+      routeId: {
+        type: String,
+        default: null
+      },
+      from: {
+        type: String,
+        default: null
+      },
+      to: {
+        type: String,
+        default: null
+      },
+      fare: {
+        type: Number,
+        default: null
       }
     }
   },

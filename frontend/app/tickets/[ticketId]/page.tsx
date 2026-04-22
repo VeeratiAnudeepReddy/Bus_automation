@@ -30,7 +30,7 @@ export default function TicketDetailsPage() {
       if (!isLoaded || !user) {
         return;
       }
-      if (role === 'admin') {
+      if (role === 'admin' || role === 'fare_manager') {
         return;
       }
       try {
@@ -54,7 +54,7 @@ export default function TicketDetailsPage() {
   }, [isLoaded, params.ticketId, role, user]);
 
   useEffect(() => {
-    if (ready && role === 'admin') {
+    if (ready && (role === 'admin' || role === 'fare_manager')) {
       router.replace('/admin');
     }
   }, [ready, role, router]);

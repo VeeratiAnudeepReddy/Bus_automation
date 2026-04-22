@@ -16,21 +16,57 @@ export type AppUser = {
   email: string;
   phone: string;
   clerkUserId: string;
-  role: 'user' | 'admin';
+  role: 'user' | 'admin' | 'fare_manager';
   balance: number;
+};
+
+export type StopItem = {
+  name: string;
+  coords: {
+    lat: number;
+    lng: number;
+  };
+};
+
+export type RouteItem = {
+  _id: string;
+  from: string;
+  to: string;
+  fare: number;
+  city: string;
+  active: boolean;
+  fromCoords: {
+    lat: number;
+    lng: number;
+  };
+  toCoords: {
+    lat: number;
+    lng: number;
+  };
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type TicketItem = {
   ticketId: string;
   userId: string;
+  routeId?: string | null;
+  from?: string | null;
+  to?: string | null;
   status: 'ACTIVE' | 'USED';
   fare?: number;
+  fromCoords?: { lat: number; lng: number } | null;
+  toCoords?: { lat: number; lng: number } | null;
   createdAt: string;
   scannedAt: string | null;
   qrPayload: {
     ticketId: string;
     userId: string;
     timestamp: string;
+    routeId?: string | null;
+    from?: string | null;
+    to?: string | null;
+    fare?: number | null;
   };
   qr: string;
 };
@@ -65,7 +101,16 @@ export const apiService = {
 
   bookTickets: async (
     clerkUserId: string,
-    count: number
+    payload:
+      | number
+      | {
+          count?: number;
+          routeId?: string;
+          from?: string;
+          to?: string;
+          fromCoords?: { lat: number; lng: number } | null;
+          toCoords?: { lat: number; lng: number } | null;
+        }
   ): Promise<{
     ticketPrice: number;
     count: number;
@@ -73,7 +118,8 @@ export const apiService = {
     balance: number;
     tickets: TicketItem[];
   }> => {
-    const response = await api.post('/tickets/book', { count }, authHeaders(clerkUserId));
+    const bookingPayload = typeof payload === 'number' ? { count: payload } : payload;
+    const response = await api.post('/tickets/book', bookingPayload, authHeaders(clerkUserId));
     return response.data;
   },
 
@@ -96,6 +142,91 @@ export const apiService = {
     dailyScannedStats: { _id: string; scanned: number }[];
   }> => {
     const response = await api.get('/admin/analytics', authHeaders(clerkUserId));
+    return response.data;
+  },
+
+  getRoutes: async (
+    clerkUserId: string,
+    params?: { city?: string; from?: string; to?: string }
+  ): Promise<{ city: string; routes: RouteItem[]; stops: StopItem[]; popularRoutes: RouteItem[] }> => {
+    const response = await api.get('/routes', {
+      ...authHeaders(clerkUserId),
+      params
+    });
+    return response.data;
+  },
+
+  getAdminRoutes: async (
+    clerkUserId: string,
+    params?: { city?: string; search?: string; status?: 'all' | 'active' | 'inactive' }
+  ): Promise<{ routes: RouteItem[] }> => {
+    const response = await api.get('/admin/routes', {
+      ...authHeaders(clerkUserId),
+      params
+    });
+    return response.data;
+  },
+
+  createAdminRoute: async (
+    clerkUserId: string,
+    payload: {
+      from: string;
+      to: string;
+      fare: number;
+      city?: string;
+      active?: boolean;
+      fromCoords: { lat: number; lng: number };
+      toCoords: { lat: number; lng: number };
+    }
+  ): Promise<RouteItem> => {
+    const response = await api.post('/admin/routes/create', payload, authHeaders(clerkUserId));
+    return response.data;
+  },
+
+  updateAdminRoute: async (
+    clerkUserId: string,
+    routeId: string,
+    payload: Partial<{
+      from: string;
+      to: string;
+      fare: number;
+      city: string;
+      active: boolean;
+      fromCoords: { lat: number; lng: number };
+      toCoords: { lat: number; lng: number };
+    }>
+  ): Promise<RouteItem> => {
+    const response = await api.put(`/admin/routes/${routeId}`, payload, authHeaders(clerkUserId));
+    return response.data;
+  },
+
+  deleteAdminRoute: async (clerkUserId: string, routeId: string): Promise<{ success: boolean }> => {
+    const response = await api.delete(`/admin/routes/${routeId}`, authHeaders(clerkUserId));
+    return response.data;
+  },
+
+  toggleAdminRoute: async (clerkUserId: string, routeId: string): Promise<RouteItem> => {
+    const response = await api.patch(`/admin/routes/${routeId}/toggle`, {}, authHeaders(clerkUserId));
+    return response.data;
+  },
+
+  getFareHistory: async (
+    clerkUserId: string,
+    routeId?: string
+  ): Promise<{
+    history: {
+      _id: string;
+      route: { _id: string; from: string; to: string; city: string };
+      previousFare: number;
+      newFare: number;
+      updatedBy: { _id: string; name: string; email: string; role: string };
+      createdAt: string;
+    }[];
+  }> => {
+    const response = await api.get('/admin/routes/fare-history', {
+      ...authHeaders(clerkUserId),
+      params: routeId ? { routeId } : undefined
+    });
     return response.data;
   }
 };

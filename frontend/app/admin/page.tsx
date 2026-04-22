@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useUser } from '@clerk/nextjs';
+import Link from 'next/link';
 import { Html5Qrcode } from 'html5-qrcode';
 import { Flashlight, ScanLine } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -11,6 +11,7 @@ import ActionButton from '@/components/ActionButton';
 import ScannerCard from '@/components/ScannerCard';
 import { apiService, ScanResult } from '@/lib/api';
 import { addActivity } from '@/lib/activity';
+import { useAppRole } from '@/lib/useAppRole';
 
 type Analytics = {
   totalScannedTickets: number;
@@ -20,35 +21,38 @@ type Analytics = {
 const scannerId = 'admin-busqr-scanner';
 
 export default function AdminPage() {
-  const { isLoaded, user } = useUser();
+  const { isLoaded, user, role, ready } = useAppRole();
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [data, setData] = useState<Analytics | null>(null);
-  const [allowed, setAllowed] = useState(false);
+  const [allowed, setAllowed] = useState<boolean | null>(null);
   const [scanning, setScanning] = useState(false);
   const [manual, setManual] = useState('');
   const [result, setResult] = useState<ScanResult | null>(null);
+  const isScannerAdmin = role === 'admin';
 
   useEffect(() => {
     const load = async () => {
-      if (!isLoaded || !user) {
+      if (!isLoaded || !ready) {
+        return;
+      }
+      if (!user) {
+        setAllowed(false);
         return;
       }
 
-      try {
-        const appUser = await apiService.syncUser({
-          clerkUserId: user.id,
-          name: user.fullName || 'Bus User',
-          email: user.primaryEmailAddress?.emailAddress || '',
-          phone: user.primaryPhoneNumber?.phoneNumber
-        });
-        if (appUser.role !== 'admin') {
-          setAllowed(false);
-          return;
-        }
-        setAllowed(true);
-        setData(await apiService.getAdminAnalytics(user.id));
-      } catch {
+      if (role !== 'admin' && role !== 'fare_manager') {
         setAllowed(false);
+        return;
+      }
+
+      setAllowed(true);
+
+      if (role === 'admin') {
+        try {
+          setData(await apiService.getAdminAnalytics(user.id));
+        } catch {
+          setData(null);
+        }
       }
     };
 
@@ -59,10 +63,14 @@ export default function AdminPage() {
         void scannerRef.current.stop().catch(() => undefined);
       }
     };
-  }, [isLoaded, user]);
+  }, [isLoaded, ready, role, user]);
 
   const validateTicket = async (payload: string) => {
     if (!user) {
+      return;
+    }
+    if (!isScannerAdmin) {
+      toast.error('Scanner access is available for admin role');
       return;
     }
     try {
@@ -80,6 +88,10 @@ export default function AdminPage() {
 
   const startScanner = async () => {
     if (!user) {
+      return;
+    }
+    if (!isScannerAdmin) {
+      toast.error('Scanner access is available for admin role');
       return;
     }
     try {
@@ -109,25 +121,51 @@ export default function AdminPage() {
     await validateTicket(manual.trim());
   };
 
+  if (!isLoaded || !ready || allowed === null) {
+    return <PageShell showTabs={false} />;
+  }
+
   return (
     <PageShell showTabs={false}>
       <section className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
-        <h1 className="text-base font-semibold text-zinc-900">Admin Scanner Dashboard</h1>
+        <h1 className="text-base font-semibold text-zinc-900">Admin Dashboard</h1>
         {!allowed ? (
           <p className="mt-2 text-sm text-zinc-500">Admin access required.</p>
         ) : (
-          <div className="mt-3 space-y-3 text-sm">
-            <div className="rounded-xl border border-zinc-200 p-3">
-              Tickets Scanned by You: <strong>{data?.totalScannedTickets ?? 0}</strong>
-            </div>
-            <div className="rounded-xl border border-zinc-200 p-3">
-              Last 7 Days: <strong>{data?.dailyScannedStats.reduce((n, day) => n + day.scanned, 0) ?? 0}</strong>
-            </div>
+          <div className="mt-3 grid gap-2 text-sm">
+            <div className="rounded-xl border border-zinc-200 p-3">Users Management</div>
+            <div className="rounded-xl border border-zinc-200 p-3">Ticket Monitoring</div>
+            <div className="rounded-xl border border-zinc-200 p-3">Analytics</div>
+            <Link href="/admin/fares" className="rounded-xl border border-zinc-200 p-3 font-medium text-zinc-900">
+              Fare Management
+            </Link>
           </div>
         )}
       </section>
 
-      {allowed ? (
+      {allowed && isScannerAdmin ? (
+        <>
+          <section className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <h2 className="text-sm font-semibold text-zinc-900">Scanner Analytics</h2>
+            <div className="mt-3 space-y-3 text-sm">
+              <div className="rounded-xl border border-zinc-200 p-3">
+                Tickets Scanned by You: <strong>{data?.totalScannedTickets ?? 0}</strong>
+              </div>
+              <div className="rounded-xl border border-zinc-200 p-3">
+                Last 7 Days: <strong>{data?.dailyScannedStats.reduce((n, day) => n + day.scanned, 0) ?? 0}</strong>
+              </div>
+            </div>
+          </section>
+        </>
+      ) : null}
+
+      {allowed && !isScannerAdmin ? (
+        <section className="rounded-3xl border border-zinc-200 bg-white p-4 text-sm text-zinc-600 shadow-sm">
+          Fare manager access is enabled. Use Fare Management to configure routes and fares.
+        </section>
+      ) : null}
+
+      {allowed && isScannerAdmin ? (
         <>
           <section className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
             <p className="text-sm font-semibold text-zinc-900">Scanner Reference Image</p>
@@ -195,7 +233,7 @@ export default function AdminPage() {
         </>
       ) : null}
 
-      {result ? <ScannerCard result={result} /> : null}
+      {allowed && isScannerAdmin && result ? <ScannerCard result={result} /> : null}
     </PageShell>
   );
 }

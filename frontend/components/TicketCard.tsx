@@ -20,6 +20,11 @@ export default function TicketCard({ ticket, status }: Props) {
         </p>
         <StatusBadge status={status} />
       </div>
+      {ticket.from && ticket.to ? (
+        <p className="mt-1 text-xs text-zinc-600">
+          {ticket.from} → {ticket.to}
+        </p>
+      ) : null}
       <p className="mt-2 text-xs text-zinc-500">{formatDateTime(ticket.createdAt)}</p>
     </Link>
   );

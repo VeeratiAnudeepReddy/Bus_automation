@@ -4,11 +4,29 @@ const QRCode = require('qrcode');
 const config = require('../config');
 const User = require('../models/User');
 const Ticket = require('../models/Ticket');
+const Route = require('../models/Route');
 
 const TICKET_PRICE = Number(config.FARE) || 20;
 const MAX_TICKETS_PER_BOOKING = 20;
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const uuidExtractRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+const normalizeStop = (value) => String(value || '').trim();
+const normalizeStopLower = (value) => normalizeStop(value).toLowerCase();
+
+const parseTicketCoords = (coords, fallbackCoords = null) => {
+  const input = coords || fallbackCoords;
+  if (!input || typeof input !== 'object') {
+    return null;
+  }
+
+  const lat = Number(input.lat);
+  const lng = Number(input.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return null;
+  }
+
+  return { lat, lng };
+};
 
 const parseTicketIdFromScan = (input) => {
   if (!input || typeof input !== 'string') {
@@ -44,9 +62,11 @@ const parseTicketIdFromScan = (input) => {
 
 exports.bookTickets = async (req, res) => {
   const session = await mongoose.startSession();
+  let n = 1;
+  let ticketFare = TICKET_PRICE;
 
   try {
-    const n = Number(req.body.count);
+    n = Number(req.body.count ?? 1);
     if (!Number.isInteger(n) || n <= 0) {
       return res.status(400).json({ error: 'count must be a positive integer' });
     }
@@ -54,7 +74,40 @@ exports.bookTickets = async (req, res) => {
       return res.status(400).json({ error: `count cannot exceed ${MAX_TICKETS_PER_BOOKING}` });
     }
 
-    const totalAmount = n * TICKET_PRICE;
+    let selectedRoute = null;
+    let from = null;
+    let to = null;
+    let fromCoords = null;
+    let toCoords = null;
+
+    const routeId = normalizeStop(req.body.routeId);
+    const fromInput = normalizeStop(req.body.from);
+    const toInput = normalizeStop(req.body.to);
+    const wantsRouteAwareBooking = Boolean(routeId || fromInput || toInput);
+
+    if (wantsRouteAwareBooking) {
+      if (routeId) {
+        selectedRoute = await Route.findOne({ _id: routeId, active: true }).lean();
+      } else if (fromInput && toInput) {
+        selectedRoute = await Route.findOne({
+          active: true,
+          fromNormalized: normalizeStopLower(fromInput),
+          toNormalized: normalizeStopLower(toInput)
+        }).lean();
+      }
+
+      if (!selectedRoute) {
+        return res.status(400).json({ error: 'Selected route is unavailable' });
+      }
+
+      ticketFare = selectedRoute.fare;
+      from = selectedRoute.from;
+      to = selectedRoute.to;
+      fromCoords = parseTicketCoords(req.body.fromCoords, selectedRoute.fromCoords);
+      toCoords = parseTicketCoords(req.body.toCoords, selectedRoute.toCoords);
+    }
+
+    const totalAmount = n * ticketFare;
     const nowIso = new Date().toISOString();
 
     const ticketDrafts = Array.from({ length: n }, () => {
@@ -62,12 +115,21 @@ exports.bookTickets = async (req, res) => {
       return {
         ticketId,
         userId: req.user._id,
+        routeId: selectedRoute?._id || null,
+        from,
+        to,
         status: 'ACTIVE',
-        fare: TICKET_PRICE,
+        fare: ticketFare,
+        fromCoords,
+        toCoords,
         qrPayload: {
           ticketId,
           userId: String(req.user._id),
-          timestamp: nowIso
+          timestamp: nowIso,
+          routeId: selectedRoute ? String(selectedRoute._id) : null,
+          from,
+          to,
+          fare: ticketFare
         }
       };
     });
@@ -101,15 +163,20 @@ exports.bookTickets = async (req, res) => {
     });
 
     return res.status(200).json({
-      ticketPrice: TICKET_PRICE,
+      ticketPrice: ticketFare,
       count: n,
       totalAmount,
       balance: updatedUser.balance,
       tickets: createdTickets.map((ticket, index) => ({
         ticketId: ticket.ticketId,
         userId: ticket.userId,
+        routeId: ticket.routeId,
+        from: ticket.from,
+        to: ticket.to,
         status: ticket.status,
         fare: ticket.fare,
+        fromCoords: ticket.fromCoords,
+        toCoords: ticket.toCoords,
         createdAt: ticket.createdAt,
         qrPayload: ticket.qrPayload,
         qr: qrImages[index]
@@ -121,7 +188,7 @@ exports.bookTickets = async (req, res) => {
       return res.status(400).json({
         error: 'Insufficient balance',
         balance: latestUser?.balance ?? 0,
-        required: Number(req.body.count) * TICKET_PRICE
+        required: n * ticketFare
       });
     }
 
@@ -143,8 +210,13 @@ exports.getMyTickets = async (req, res) => {
       tickets.map(async (ticket) => ({
         ticketId: ticket.ticketId,
         userId: ticket.userId,
+        routeId: ticket.routeId,
+        from: ticket.from || null,
+        to: ticket.to || null,
         status: ticket.status,
         fare: ticket.fare,
+        fromCoords: ticket.fromCoords || null,
+        toCoords: ticket.toCoords || null,
         createdAt: ticket.createdAt,
         scannedAt: ticket.scannedAt,
         qrPayload: ticket.qrPayload,

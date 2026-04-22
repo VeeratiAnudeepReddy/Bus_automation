@@ -8,6 +8,7 @@ const authRoutes = require('./routes/authRoutes');
 const walletRoutes = require('./routes/walletRoutes');
 const ticketRoutes = require('./routes/ticketRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const routeRoutes = require('./routes/routeRoutes');
 
 const app = express();
 
@@ -34,6 +35,7 @@ app.use('/api', authRoutes);
 app.use('/api', walletRoutes);
 app.use('/api', ticketRoutes);
 app.use('/api', adminRoutes);
+app.use('/api', routeRoutes);
 
 // Health check endpoint
 app.get('/', (req, res) => {

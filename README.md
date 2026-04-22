@@ -11,8 +11,11 @@ A modern, premium QR Code-based Public Bus Ticketing System with sleek UI/UX, fe
 
 - ✅ **User Registration & Wallet Management**
 - ✅ **QR Code Ticket Generation**
+- ✅ **Route-based Fixed Fare Booking**
 - ✅ **Real-time QR Scanner** (Camera-based)
 - ✅ **Instant Ticket Validation**
+- ✅ **Admin Fare Management** (Create/Edit/Toggle routes)
+- ✅ **Map-based From/To Pinning**
 - ✅ **Color-coded Feedback** (Valid/Invalid/Used)
 - ✅ **Premium Glassmorphism UI**
 - ✅ **Smooth Animations & Transitions**
@@ -119,6 +122,15 @@ Bus-automation/
 
 ### Tickets
 - `POST /api/generate-ticket` - Generate QR ticket (₹10)
+- `POST /api/tickets/book` - Book ticket with fixed route fare (`routeId`, `from`, `to`, `fromCoords`, `toCoords`)
+
+### Routes & Fare Management
+- `GET /api/routes?from=&to=` - Fetch active routes and fare by stop pair
+- `GET /api/admin/routes` - List route fare configuration (admin/fare manager)
+- `POST /api/admin/routes/create` - Create route fare (admin/fare manager)
+- `PUT /api/admin/routes/:id` - Update route fare/stops/coords (admin/fare manager)
+- `DELETE /api/admin/routes/:id` - Delete route (admin/fare manager)
+- `PATCH /api/admin/routes/:id/toggle` - Enable/disable route (admin/fare manager)
 
 ### Validation
 - `POST /api/validate` - Validate ticket

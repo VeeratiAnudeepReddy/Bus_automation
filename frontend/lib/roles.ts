@@ -24,6 +24,35 @@ const staffRoles: AppRole[] = [
   'support'
 ];
 const organizationManagerRoles: AppRole[] = ['org_owner', 'org_admin', 'super_admin'];
+const customerRoles: AppRole[] = ['customer', 'user'];
+const operationsRoles: AppRole[] = [
+  'super_admin',
+  'org_owner',
+  'org_admin',
+  'operations_manager',
+  'fleet_manager',
+  'dispatcher',
+  'scheduler',
+  'bus_manager'
+];
+const tripCrewRoles: AppRole[] = [...operationsRoles, 'driver', 'conductor', 'admin'];
+const financeRoles: AppRole[] = ['super_admin', 'org_owner', 'org_admin', 'finance_manager'];
+const postManagerRoles: AppRole[] = ['super_admin', 'org_owner', 'org_admin', 'admin'];
+const postReaderRoles: AppRole[] = [
+  ...postManagerRoles,
+  'operations_manager',
+  'fleet_manager',
+  'dispatcher',
+  'scheduler',
+  'bus_manager',
+  'finance_manager',
+  'price_manager',
+  'fare_manager',
+  'driver',
+  'conductor',
+  'support',
+  ...customerRoles
+];
 
 export function isScannerRole(role: AppRole | null): boolean {
   return Boolean(role && scannerRoles.includes(role));
@@ -39,6 +68,14 @@ export function isStaffRole(role: AppRole | null): boolean {
 
 export function isOrganizationManagerRole(role: AppRole | null): boolean {
   return Boolean(role && organizationManagerRoles.includes(role));
+}
+
+export function isCustomerRole(role: AppRole | null): boolean {
+  return Boolean(role && customerRoles.includes(role));
+}
+
+export function isPostManagerRole(role: AppRole | null): boolean {
+  return Boolean(role && postManagerRoles.includes(role));
 }
 
 export const roleDashboard: Record<string, string> = {
@@ -68,14 +105,20 @@ export function dashboardForRole(role: AppRole | null): string {
 const accessRules: { pattern: RegExp; roles: string[] }[] = [
   { pattern: /^\/super-admin/, roles: ['super_admin'] },
   { pattern: /^\/organization|^\/organizations/, roles: ['super_admin', 'org_owner', 'org_admin'] },
-  { pattern: /^\/operations|^\/fleet|^\/dispatcher|^\/trips|^\/calendar|^\/buses|^\/drivers|^\/conductors|^\/schedules|^\/assignments|^\/maintenance|^\/fuel|^\/leave|^\/incidents|^\/my-trips|^\/trip-status|^\/track|^\/boarding/, roles: ['super_admin', 'org_owner', 'org_admin', 'operations_manager', 'fleet_manager', 'dispatcher', 'scheduler', 'bus_manager', 'driver', 'conductor', 'finance_manager', 'support', 'customer', 'user'] },
-  { pattern: /^\/finance|^\/payments|^\/reports|^\/audit/, roles: ['super_admin', 'org_owner', 'org_admin', 'finance_manager', 'operations_manager', 'fleet_manager', 'dispatcher', 'driver', 'conductor', 'support'] },
-  { pattern: /^\/pricing|^\/admin\/pricing|^\/admin\/coupons|^\/admin\/fares/, roles: ['super_admin', 'org_owner', 'org_admin', 'price_manager', 'fare_manager'] },
+  { pattern: /^\/my-trips/, roles: [...customerRoles] },
+  { pattern: /^\/trip-status/, roles: [...tripCrewRoles, ...customerRoles] },
+  { pattern: /^\/track/, roles: [...tripCrewRoles] },
+  { pattern: /^\/boarding/, roles: ['super_admin', 'org_owner', 'org_admin', 'operations_manager', 'fleet_manager', 'dispatcher', 'conductor', 'admin'] },
+  { pattern: /^\/operations|^\/fleet|^\/dispatcher|^\/trips|^\/calendar|^\/buses|^\/drivers|^\/conductors|^\/schedules|^\/assignments|^\/maintenance|^\/fuel|^\/leave|^\/incidents/, roles: [...operationsRoles, 'driver', 'conductor', 'admin'] },
+  { pattern: /^\/finance|^\/payments|^\/reports|^\/audit/, roles: [...financeRoles, 'operations_manager', 'fleet_manager', 'dispatcher', 'support'] },
+  { pattern: /^\/pricing|^\/admin\/pricing|^\/admin\/coupons|^\/admin\/fares/, roles: ['super_admin', 'org_owner', 'org_admin', 'price_manager', 'fare_manager', 'fleet_manager', 'operations_manager'] },
   { pattern: /^\/driver/, roles: ['super_admin', 'org_owner', 'org_admin', 'operations_manager', 'fleet_manager', 'dispatcher', 'driver'] },
   { pattern: /^\/conductor|^\/admin|^\/scanner/, roles: ['super_admin', 'org_owner', 'org_admin', 'operations_manager', 'fleet_manager', 'dispatcher', 'conductor', 'admin'] },
   { pattern: /^\/support/, roles: ['super_admin', 'org_owner', 'org_admin', 'support', 'customer', 'driver', 'conductor'] },
-  { pattern: /^\/posts/, roles: ['super_admin', 'org_owner', 'org_admin', 'operations_manager', 'fleet_manager', 'dispatcher', 'scheduler', 'bus_manager', 'finance_manager', 'price_manager', 'driver', 'conductor', 'support', 'customer', 'user'] },
-  { pattern: /^\/customer|^\/booking|^\/bookings|^\/tickets|^\/wallet|^\/generate|^\/refunds/, roles: ['super_admin', 'customer', 'user'] }
+  { pattern: /^\/posts\/new/, roles: [...postManagerRoles] },
+  { pattern: /^\/posts/, roles: [...postReaderRoles] },
+  { pattern: /^\/customer|^\/booking|^\/bookings|^\/tickets|^\/wallet|^\/notifications|^\/profile|^\/settings|^\/search/, roles: ['super_admin', ...customerRoles] },
+  { pattern: /^\/generate|^\/refunds/, roles: ['super_admin', 'org_owner', 'org_admin', 'finance_manager'] }
 ];
 
 export function canAccessPath(role: AppRole | null, pathname: string): boolean {
@@ -217,9 +260,9 @@ export function navForRole(role: AppRole | null): { href: string; label: string 
   }
   return [
     { href: '/customer', label: 'Home' },
-      { href: '/booking', label: 'Book' },
-      { href: '/my-trips', label: 'My Trips' },
-      { href: '/bookings', label: 'Bookings' },
+    { href: '/booking', label: 'Book' },
+    { href: '/my-trips', label: 'My Trips' },
+    { href: '/bookings', label: 'Bookings' },
     { href: '/wallet', label: 'Wallet' },
     { href: '/tickets', label: 'Tickets' },
     { href: '/notifications', label: 'Notifications' },

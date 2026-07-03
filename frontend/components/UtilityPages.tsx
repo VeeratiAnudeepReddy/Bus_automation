@@ -183,7 +183,7 @@ export function OnboardingPageContent() {
     ['Add Driver', '/drivers'],
     ['Add Conductor', '/conductors'],
     ['Pricing', '/pricing'],
-    ['Ready', '/dashboard']
+    ['Launch workspace', '/dashboard']
   ];
   return (
     <PageShell showTabs={false}>

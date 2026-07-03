@@ -1,3 +1,5 @@
-import TripsPage from '@/app/trips/page';
+import { CustomerBookingsPageContent } from '@/components/CustomerExperience';
 
-export default TripsPage;
+export default function MyTripsPage() {
+  return <CustomerBookingsPageContent />;
+}

@@ -5,6 +5,7 @@ import { AlertTriangle, Bus, CalendarClock, Map, Route, Users, type LucideIcon }
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import PageShell from '@/components/PageShell';
+import { RouteMap } from '@/components/maps/MapView';
 import { apiService, OperationsDashboard } from '@/lib/api';
 import { useAppRole } from '@/lib/useAppRole';
 
@@ -73,14 +74,9 @@ export default function OperationsPage() {
       <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
         <div className="flex items-center gap-2 p-4">
           <Map size={18} />
-          <h2 className="text-sm font-semibold text-zinc-900">Google Maps Route Preview</h2>
+          <h2 className="text-sm font-semibold text-zinc-900">Interactive Route Preview</h2>
         </div>
-        <iframe
-          title="Hyderabad operations map"
-          src="https://www.google.com/maps?q=Hyderabad%20bus%20routes&output=embed"
-          className="h-64 w-full border-0"
-          loading="lazy"
-        />
+        <RouteMap className="h-64" />
       </section>
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">

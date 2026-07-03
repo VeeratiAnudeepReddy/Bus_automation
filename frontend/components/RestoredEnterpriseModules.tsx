@@ -32,6 +32,7 @@ import toast from 'react-hot-toast';
 import PageShell from '@/components/PageShell';
 import ActionButton from '@/components/ActionButton';
 import LoadingSkeleton from '@/components/LoadingSkeleton';
+import { RouteMap } from '@/components/maps/MapView';
 import { apiService, BusItem, FareRuleItem } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 import { useAppRole } from '@/lib/useAppRole';
@@ -160,11 +161,11 @@ function MapCard({ label = 'Live operations map' }: { label?: string }) {
       <div className="flex items-center justify-between p-5">
         <div>
           <h2 className="text-lg font-semibold text-zinc-950">{label}</h2>
-          <p className="text-sm text-zinc-500">Google Maps embed with route, bus, stop, and ETA context when backend data is available.</p>
+          <p className="text-sm text-zinc-500">Interactive map with route, bus, stop, and ETA context when backend data is available.</p>
         </div>
         <MapPin size={18} className="text-zinc-500" />
       </div>
-      <iframe title={label} src="https://www.google.com/maps?q=Hyderabad%20bus%20routes&z=12&output=embed" className="h-72 w-full border-0" loading="lazy" />
+      <RouteMap className="h-72" />
     </div>
   );
 }
@@ -522,8 +523,8 @@ export function RestoredModulePage({ kind }: { kind: ModuleKind }) {
           <section className="grid gap-4 xl:grid-cols-[1fr_420px]">
             <div className="space-y-4">
               <div className="grid gap-4 lg:grid-cols-2">
-                <MiniAreaChart data={data.chart.length ? data.chart : [{ label: 'No data', value: 0 }]} />
-                <DonutChart data={data.chart.length ? data.chart.slice(0, 5) : [{ label: 'No data', value: 1 }]} />
+                <MiniAreaChart data={data.chart.length ? data.chart : [{ label: 'No results', value: 0 }]} />
+                <DonutChart data={data.chart.length ? data.chart.slice(0, 5) : [{ label: 'No results', value: 1 }]} />
               </div>
               {data.mapLabel ? <MapCard label={data.mapLabel} /> : null}
               <EnterpriseTable rows={data.rows} title={`${data.title} Table`} />

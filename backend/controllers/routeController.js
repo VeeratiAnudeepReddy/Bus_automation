@@ -79,34 +79,47 @@ const serializeRoute = (route) => ({
 });
 
 const ensureHyderabadSeedRoutes = async (organizationId) => {
-  const operations = hyderabadSeedRoutes.map((seed) => ({
-    updateOne: {
-      filter: {
-        organizationId,
-        city: HYDERABAD,
-        fromNormalized: normalizeStopLower(seed.from),
-        toNormalized: normalizeStopLower(seed.to)
-      },
-      update: {
-        $setOnInsert: {
-          from: seed.from,
-          to: seed.to,
-          fromNormalized: normalizeStopLower(seed.from),
-          toNormalized: normalizeStopLower(seed.to),
-          fare: seed.fare,
-          city: HYDERABAD,
-          active: true,
-          fromCoords: seed.fromCoords,
-          toCoords: seed.toCoords,
-          organizationId
-        }
-      },
-      upsert: true
-    }
-  }));
+  for (const seed of hyderabadSeedRoutes) {
+    const fromNormalized = normalizeStopLower(seed.from);
+    const toNormalized = normalizeStopLower(seed.to);
+    const routeIdentity = {
+      city: HYDERABAD,
+      fromNormalized,
+      toNormalized
+    };
+    const insertDefaults = {
+      from: seed.from,
+      to: seed.to,
+      fromNormalized,
+      toNormalized,
+      fare: seed.fare,
+      city: HYDERABAD,
+      active: true,
+      fromCoords: seed.fromCoords,
+      toCoords: seed.toCoords,
+      organizationId
+    };
 
-  if (operations.length) {
-    await Route.bulkWrite(operations, { ordered: false });
+    try {
+      await Route.updateOne(
+        { organizationId, ...routeIdentity },
+        { $setOnInsert: insertDefaults },
+        { upsert: true }
+      );
+    } catch (error) {
+      if (error.code !== 11000) {
+        throw error;
+      }
+
+      // Older databases may still have a pre-organization unique index on
+      // city/fromNormalized/toNormalized. Attach matching legacy seed rows to
+      // this organization instead of failing every route-list request.
+      await Route.updateOne(
+        { ...routeIdentity, organizationId: { $in: [organizationId, null] } },
+        { $set: { organizationId } },
+        { upsert: false }
+      );
+    }
   }
 };
 

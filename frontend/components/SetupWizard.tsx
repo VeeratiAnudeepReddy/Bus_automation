@@ -118,7 +118,16 @@ export default function SetupWizard({ mode = 'firstRun' }: { mode?: 'firstRun' |
             </label>
           ))}
           {step === 0 ? <p className="text-sm text-zinc-600">This wizard creates the first organization and assigns you as organization owner. It disappears after setup is complete.</p> : null}
-          {step === steps.length - 1 ? <pre className="max-h-64 overflow-auto rounded-xl bg-zinc-100 p-3 text-xs">{JSON.stringify(form, null, 2)}</pre> : null}
+          {step === steps.length - 1 ? (
+            <div className="max-h-64 overflow-auto rounded-xl bg-zinc-100 p-3 text-xs text-zinc-700">
+              {Object.entries(form).map(([key, value]) => (
+                <p key={key} className="flex justify-between gap-4 border-b border-zinc-200 py-1 last:border-b-0">
+                  <span className="font-medium capitalize">{key.replace(/([A-Z])/g, ' $1')}</span>
+                  <span className="text-right">{String(value || 'Not provided')}</span>
+                </p>
+              ))}
+            </div>
+          ) : null}
         </div>
         <div className="mt-5 grid grid-cols-2 gap-2">
           <ActionButton type="button" variant="outline" disabled={step === 0} onClick={() => setStep((prev) => Math.max(0, prev - 1))}>Back</ActionButton>

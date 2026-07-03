@@ -12,33 +12,44 @@ import EmptyState from '@/components/EmptyState';
 import ActionButton from '@/components/ActionButton';
 import { apiService, PostItem, SupportTicketItem } from '@/lib/api';
 import { useAppRole } from '@/lib/useAppRole';
+import { isPostManagerRole } from '@/lib/roles';
 
 export function PostsPageContent() {
-  const { isLoaded, ready, user, getToken } = useAppRole();
+  const { isLoaded, ready, user, role, getToken } = useAppRole();
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [search, setSearch] = useState('');
+  const canManagePosts = isPostManagerRole(role);
 
   useEffect(() => {
     const load = async () => {
       if (!isLoaded || !ready || !user) return;
       const token = await getToken();
       if (!token) return;
-      const data = await apiService.listPosts(token, { search: search || undefined });
+      const data = await apiService.listPosts(token, {
+        search: search || undefined,
+        status: canManagePosts ? undefined : 'published'
+      });
       setPosts(data.posts);
     };
     void load();
-  }, [getToken, isLoaded, ready, search, user]);
+  }, [canManagePosts, getToken, isLoaded, ready, search, user]);
 
   return (
     <PageShell showTabs={false}>
-      <PageHeader title="Posts & Announcements" description="Pinned updates, role announcements, comments, likes, drafts, and scheduled posts." actions={[{ href: '/posts/new', label: 'New Post' }]} />
-      <SearchBar value={search} onChange={setSearch} placeholder="Search posts, tags, announcements..." />
-      <section className="grid gap-2 md:grid-cols-4">
-        <MetricCard label="Posts" value={posts.length} />
-        <MetricCard label="Pinned" value={posts.filter((p) => p.pinned).length} />
-        <MetricCard label="Drafts" value={posts.filter((p) => p.status === 'draft').length} />
-        <MetricCard label="Urgent" value={posts.filter((p) => p.priority === 'urgent').length} />
-      </section>
+      <PageHeader
+        title={canManagePosts ? 'Posts & Announcements' : 'Announcements'}
+        description={canManagePosts ? 'Create, pin, schedule, moderate, and publish organization updates.' : 'Published organization announcements and offers.'}
+        actions={canManagePosts ? [{ href: '/posts/new', label: 'New Post' }] : undefined}
+      />
+      <SearchBar value={search} onChange={setSearch} placeholder="Search announcements..." />
+      {canManagePosts ? (
+        <section className="grid gap-2 md:grid-cols-4">
+          <MetricCard label="Posts" value={posts.length} />
+          <MetricCard label="Pinned" value={posts.filter((p) => p.pinned).length} />
+          <MetricCard label="Drafts" value={posts.filter((p) => p.status === 'draft').length} />
+          <MetricCard label="Urgent" value={posts.filter((p) => p.priority === 'urgent').length} />
+        </section>
+      ) : null}
       <section className="grid gap-3">
         {posts.length ? posts.map((post) => (
           <Link key={post._id} href={`/posts/${post._id}`} className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
@@ -51,18 +62,19 @@ export function PostsPageContent() {
               {post.pinned ? <span className="rounded-full bg-black px-2 py-1 text-xs text-white">PINNED</span> : null}
             </div>
           </Link>
-        )) : <EmptyState title="No posts" description="Create the first announcement for your organization." actionHref="/posts/new" actionLabel="New Post" />}
+        )) : <EmptyState title="No announcements" description={canManagePosts ? 'Create the first announcement for your organization.' : 'No announcements are published yet.'} actionHref={canManagePosts ? '/posts/new' : undefined} actionLabel={canManagePosts ? 'New Post' : undefined} />}
       </section>
     </PageShell>
   );
 }
 
 export function NewPostPageContent() {
-  const { user, getToken } = useAppRole();
+  const { user, role, getToken } = useAppRole();
   const [form, setForm] = useState({ title: '', body: '', category: 'announcement', priority: 'normal', tags: '' });
+  const canManagePosts = isPostManagerRole(role);
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!user) return;
+    if (!user || !canManagePosts) return;
     try {
       const token = await getToken();
       if (!token) throw new Error('Missing token');
@@ -80,6 +92,13 @@ export function NewPostPageContent() {
       toast.error('Failed to publish post');
     }
   };
+  if (!canManagePosts) {
+    return (
+      <PageShell showTabs={false}>
+        <EmptyState title="You don't have permission to view this." description="Post creation is limited to administrators and organization owners." />
+      </PageShell>
+    );
+  }
   return (
     <PageShell showTabs={false}>
       <PageHeader title="New Post" description="Publish an announcement with tags, priority, and role visibility." />
@@ -95,9 +114,10 @@ export function NewPostPageContent() {
 
 export function PostDetailPageContent() {
   const params = useParams<{ id: string }>();
-  const { isLoaded, ready, user, getToken } = useAppRole();
+  const { isLoaded, ready, user, role, getToken } = useAppRole();
   const [post, setPost] = useState<PostItem | null>(null);
   const [comment, setComment] = useState('');
+  const canManagePosts = isPostManagerRole(role);
   const load = useCallback(async () => {
     const token = await getToken();
     if (!token || !params.id) return;
@@ -122,7 +142,7 @@ export function PostDetailPageContent() {
       {post ? (
         <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
           <p className="text-sm text-zinc-700">{post.body}</p>
-          <div className="mt-4 flex gap-2"><ActionButton onClick={() => void addComment()}>Comment</ActionButton><input value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Write a comment..." className="flex-1 rounded-xl border border-zinc-200 px-3 py-2 text-sm" /></div>
+          {canManagePosts ? <div className="mt-4 flex gap-2"><ActionButton onClick={() => void addComment()}>Comment</ActionButton><input value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Write a comment..." className="flex-1 rounded-xl border border-zinc-200 px-3 py-2 text-sm" /></div> : null}
           <div className="mt-4 space-y-2">{post.comments?.map((item) => <p key={item._id} className="rounded-xl bg-zinc-100 p-3 text-sm">{item.body}</p>)}</div>
         </section>
       ) : <EmptyState title="Post not found" description="The post may have been deleted or hidden." />}

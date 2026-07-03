@@ -8,16 +8,20 @@ import {
   Bell,
   Bus,
   CalendarDays,
+  CreditCard,
   Clock,
   Download,
+  FileText,
   Headphones,
   Languages,
+  LifeBuoy,
   Navigation,
   QrCode,
   Search,
   Shield,
   Star,
   Ticket,
+  UserCircle,
   UserRound,
   Wallet
 } from 'lucide-react';
@@ -39,6 +43,8 @@ import {
 } from '@/lib/api';
 import { formatCurrency, formatDateTime } from '@/lib/format';
 import { useAppRole } from '@/lib/useAppRole';
+import { isCustomerRole } from '@/lib/roles';
+import { RouteMap } from '@/components/maps/MapView';
 
 type CustomerData = {
   balance: number;
@@ -70,21 +76,6 @@ function statusClass(status: string) {
   return 'bg-zinc-100 text-zinc-700';
 }
 
-function MiniMap({ from, to, label }: { from?: { lat: number; lng: number } | null; to?: { lat: number; lng: number } | null; label: string }) {
-  const lat = from?.lat || to?.lat || 17.385;
-  const lng = from?.lng || to?.lng || 78.4867;
-  return (
-    <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
-      <iframe
-        title={label}
-        src={`https://www.google.com/maps?q=${lat},${lng}&z=12&output=embed`}
-        className="h-64 w-full border-0"
-        loading="lazy"
-      />
-    </div>
-  );
-}
-
 function Widget({ title, value, icon: Icon, hint }: { title: string; value: string | number; icon: typeof Wallet; hint?: string }) {
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
@@ -109,6 +100,130 @@ function RoutePill({ route }: { route: RouteItem }) {
         <span className="rounded-full bg-zinc-950 px-3 py-1 text-xs font-medium text-white">{formatCurrency(route.fare)}</span>
       </div>
     </Link>
+  );
+}
+
+function textValue(item: Record<string, unknown>, keys: string[], fallback = 'Unavailable') {
+  for (const key of keys) {
+    const value = item[key];
+    if (typeof value === 'string' && value.trim()) return value;
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  }
+  return fallback;
+}
+
+function numberValue(item: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = item[key];
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string' && value.trim() && Number.isFinite(Number(value))) return Number(value);
+  }
+  return null;
+}
+
+function statusBadge(status: string) {
+  return <span className={`rounded-full px-2 py-1 text-xs ${statusClass(status)}`}>{status}</span>;
+}
+
+function SearchResultCard({ type, item }: { type: string; item: Record<string, unknown> }) {
+  const normalizedType = type.toLowerCase();
+  if (normalizedType.includes('route')) {
+    const fare = numberValue(item, ['fare', 'amount']);
+    return (
+      <Link href={`/booking?from=${encodeURIComponent(textValue(item, ['from', 'origin'], ''))}&to=${encodeURIComponent(textValue(item, ['to', 'destination'], ''))}`} className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase text-zinc-500">Route</p>
+            <h3 className="mt-1 font-semibold text-zinc-950">{textValue(item, ['from', 'origin'])} to {textValue(item, ['to', 'destination'])}</h3>
+            <p className="mt-1 text-sm text-zinc-600">{textValue(item, ['distanceKm', 'distance'], 'Distance unavailable')} · {textValue(item, ['estimatedTime', 'durationMinutes', 'duration'], 'Time unavailable')}</p>
+          </div>
+          <span className="rounded-full bg-zinc-950 px-3 py-1 text-xs font-medium text-white">{fare == null ? 'Fare' : formatCurrency(fare)}</span>
+        </div>
+        <span className="mt-3 inline-flex rounded-xl bg-white px-3 py-2 text-sm font-medium text-zinc-950">Book</span>
+      </Link>
+    );
+  }
+
+  if (normalizedType.includes('trip')) {
+    return (
+      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+        <div className="flex items-start gap-3">
+          <Bus size={18} className="mt-1 text-zinc-500" />
+          <div>
+            <p className="font-semibold text-zinc-950">{textValue(item, ['tripCode', 'tripNumber', 'title'], 'Trip')}</p>
+            <p className="mt-1 text-sm text-zinc-600">Bus {textValue(item, ['busNumber', 'bus'], 'unassigned')} · Driver {textValue(item, ['driverName', 'driver'], 'unassigned')}</p>
+            <p className="mt-1 text-xs text-zinc-500">{textValue(item, ['departureTime', 'departure'], 'Departure pending')} to {textValue(item, ['arrivalTime', 'arrival'], 'Arrival pending')}</p>
+          </div>
+          {statusBadge(textValue(item, ['status'], 'scheduled'))}
+        </div>
+      </div>
+    );
+  }
+
+  if (normalizedType.includes('user')) {
+    return (
+      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white"><UserCircle size={20} /></div>
+          <div>
+            <p className="font-semibold text-zinc-950">{textValue(item, ['name', 'email'], 'User')}</p>
+            <p className="text-sm text-zinc-600">{textValue(item, ['role'], 'Role unavailable')} · {textValue(item, ['organization', 'organizationId'], 'Organization unavailable')}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (normalizedType.includes('report')) {
+    return (
+      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+        <div className="flex items-start gap-3">
+          <FileText size={18} className="mt-1 text-zinc-500" />
+          <div>
+            <p className="font-semibold text-zinc-950">{textValue(item, ['title', 'metric', 'name'], 'Report')}</p>
+            <p className="mt-1 text-sm text-zinc-600">Created {textValue(item, ['createdAt', 'date'], 'date unavailable')}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (normalizedType.includes('support')) {
+    return (
+      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+        <div className="flex items-start gap-3">
+          <LifeBuoy size={18} className="mt-1 text-zinc-500" />
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-zinc-950">{textValue(item, ['title', 'ticketNumber'], 'Support ticket')}</p>
+            <p className="mt-1 text-sm text-zinc-600">{textValue(item, ['priority'], 'normal')} · {textValue(item, ['category'], 'general')}</p>
+          </div>
+          {statusBadge(textValue(item, ['status'], 'open'))}
+        </div>
+      </div>
+    );
+  }
+
+  if (normalizedType.includes('payment')) {
+    const amount = numberValue(item, ['amount', 'totalAmount']);
+    return (
+      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+        <div className="flex items-start gap-3">
+          <CreditCard size={18} className="mt-1 text-zinc-500" />
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-zinc-950">{amount == null ? 'Payment' : formatCurrency(amount)}</p>
+            <p className="mt-1 text-sm text-zinc-600">{textValue(item, ['createdAt', 'date'], 'Date unavailable')}</p>
+          </div>
+          {statusBadge(textValue(item, ['status'], 'pending'))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+      <p className="font-semibold text-zinc-950">{textValue(item, ['title', 'name', 'id', '_id'], 'Result')}</p>
+      <p className="mt-1 text-sm text-zinc-600">{textValue(item, ['status', 'category', 'type'], type)}</p>
+    </div>
   );
 }
 
@@ -209,7 +324,7 @@ export function CustomerDashboardPageContent() {
               <div className="mt-5 flex flex-wrap gap-2">
                 <Link href="/booking" className="rounded-full bg-white px-4 py-2 text-sm font-medium text-zinc-950">Quick book</Link>
                 <Link href="/tickets" className="rounded-full border border-white/30 px-4 py-2 text-sm font-medium text-white">QR tickets</Link>
-                <Link href="/track/live" className="rounded-full border border-white/30 px-4 py-2 text-sm font-medium text-white">Track bus</Link>
+                <Link href="/my-trips" className="rounded-full border border-white/30 px-4 py-2 text-sm font-medium text-white">My trips</Link>
               </div>
             </div>
           </div>
@@ -265,7 +380,7 @@ export function CustomerDashboardPageContent() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-        <MiniMap label="Nearby buses map" from={data.routes[0]?.fromCoords} to={data.routes[0]?.toCoords} />
+        <RouteMap route={data.routes[0]} stops={data.stops} className="h-72" />
         <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
           <h2 className="text-lg font-semibold text-zinc-950">Recent activity</h2>
           <div className="mt-4 space-y-3">
@@ -286,6 +401,7 @@ export function CustomerDashboardPageContent() {
 export function CustomerBookingPageContent() {
   const { isLoaded, user, getToken } = useAppRole();
   const [routes, setRoutes] = useState<RouteItem[]>([]);
+  const [stops, setStops] = useState<StopItem[]>([]);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -306,6 +422,7 @@ export function CustomerBookingPageContent() {
         if (!token) throw new Error('Missing Clerk token');
         const response = await apiService.getRoutes(token, { city });
         setRoutes(response.routes);
+        setStops(response.stops);
       } catch {
         toast.error('Unable to load routes');
       } finally {
@@ -401,7 +518,7 @@ export function CustomerBookingPageContent() {
               </div>
             </article>
           ))}
-          {!loading && !available.length ? <div className="rounded-3xl border border-dashed border-zinc-200 bg-white p-6 text-sm text-zinc-500">No backend routes match this search.</div> : null}
+          {!loading && !available.length ? <div className="rounded-3xl border border-dashed border-zinc-200 bg-white p-6 text-sm text-zinc-500">No matching routes.</div> : null}
         </div>
 
         <aside className="space-y-4">
@@ -422,7 +539,7 @@ export function CustomerBookingPageContent() {
               </>
             ) : <p className="mt-3 text-sm text-zinc-500">Select a bus to view seats, driver, conductor, pickup/drop points, fare breakup, and payment.</p>}
           </div>
-          <MiniMap label="Booking route map" from={selected?.fromCoords} to={selected?.toCoords} />
+          <RouteMap route={selected} stops={stops} className="h-80" />
         </aside>
       </section>
     </PageShell>
@@ -491,6 +608,18 @@ export function CustomerBookingDetailPageContent() {
   }, [getToken, isLoaded, params.id, user]);
 
   const firstTicket = booking?.tickets[0];
+  const ticketRoute = firstTicket ? {
+    _id: firstTicket.routeId || firstTicket.ticketId,
+    from: firstTicket.from || 'Boarding point',
+    to: firstTicket.to || 'Destination',
+    fare: firstTicket.fare || booking?.totalAmount || 0,
+    city,
+    active: true,
+    fromCoords: firstTicket.fromCoords || { lat: 17.385, lng: 78.4867 },
+    toCoords: firstTicket.toCoords || { lat: 17.385, lng: 78.4867 },
+    createdAt: firstTicket.createdAt,
+    updatedAt: firstTicket.createdAt
+  } satisfies RouteItem : null;
 
   return (
     <PageShell>
@@ -523,7 +652,7 @@ export function CustomerBookingDetailPageContent() {
               </div>
             </div>
             <div className="space-y-4">
-              <MiniMap label="Booking detail route map" from={firstTicket?.fromCoords} to={firstTicket?.toCoords} />
+              <RouteMap route={ticketRoute} boarding={firstTicket?.fromCoords} destination={firstTicket?.toCoords} className="h-72" />
               <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
                 <h2 className="text-lg font-semibold text-zinc-950">Fare breakup</h2>
                 <p className="mt-3 flex justify-between text-sm"><span>Total paid</span><strong>{formatCurrency(booking.totalAmount)}</strong></p>
@@ -683,10 +812,14 @@ export function CustomerNotificationsPageContent() {
 }
 
 export function CustomerSearchPageContent() {
-  const { isLoaded, user, getToken } = useAppRole();
+  const { isLoaded, user, role, getToken } = useAppRole();
   const [query, setQuery] = useState('');
   const [groups, setGroups] = useState<{ type: string; items: Record<string, unknown>[] }[]>([]);
   const [loading, setLoading] = useState(false);
+  const customerSafeTypes = useMemo(() => ['routes', 'bookings', 'tickets', 'support', 'posts'], []);
+  const searchChips = isCustomerRole(role)
+    ? ['Routes', 'Bookings', 'Tickets', 'Support', 'Offers']
+    : ['Users', 'Trips', 'Routes', 'Buses', 'Drivers', 'Bookings', 'Tickets', 'Payments', 'Reports', 'Support'];
 
   useEffect(() => {
     const timer = window.setTimeout(async () => {
@@ -699,24 +832,27 @@ export function CustomerSearchPageContent() {
         const token = await getToken();
         if (!token) throw new Error('Missing Clerk token');
         const response = await apiService.globalSearch(token, query.trim());
-        setGroups(response.groups);
+        const nextGroups = isCustomerRole(role)
+          ? response.groups.filter((group) => customerSafeTypes.some((type) => group.type.toLowerCase().includes(type)))
+          : response.groups;
+        setGroups(nextGroups);
       } finally {
         setLoading(false);
       }
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [getToken, isLoaded, query, user]);
+  }, [customerSafeTypes, getToken, isLoaded, query, role, user]);
 
   return (
     <PageShell>
       <section className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
         <div className="flex items-center gap-3 rounded-2xl border border-zinc-200 px-4 py-3">
           <Search size={18} />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} autoFocus placeholder="Search routes, buses, bookings, tickets, payments, reports..." className="w-full bg-transparent text-sm outline-none" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} autoFocus placeholder={isCustomerRole(role) ? 'Search routes, bookings, tickets, offers, support...' : 'Search users, routes, buses, tickets, reports...'} className="w-full bg-transparent text-sm outline-none" />
           <span className="rounded-lg bg-zinc-100 px-2 py-1 text-xs text-zinc-500">⌘K</span>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
-          {['Users', 'Trips', 'Routes', 'Buses', 'Drivers', 'Bookings', 'Tickets', 'Payments', 'Reports'].map((item) => <span key={item} className="rounded-full border border-zinc-200 px-3 py-1 text-xs text-zinc-600">{item}</span>)}
+          {searchChips.map((item) => <span key={item} className="rounded-full border border-zinc-200 px-3 py-1 text-xs text-zinc-600">{item}</span>)}
         </div>
       </section>
       {loading ? <LoadingSkeleton className="h-32" /> : null}
@@ -725,11 +861,11 @@ export function CustomerSearchPageContent() {
           <div key={group.type} className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
             <h2 className="text-sm font-semibold uppercase text-zinc-500">{group.type}</h2>
             <div className="mt-3 grid gap-2">
-              {group.items.map((item, index) => <pre key={index} className="overflow-auto rounded-2xl bg-zinc-50 p-3 text-xs text-zinc-700">{JSON.stringify(item, null, 2)}</pre>)}
+              {group.items.map((item, index) => <SearchResultCard key={`${group.type}-${index}`} type={group.type} item={item} />)}
             </div>
           </div>
         ))}
-        {query.length >= 2 && !loading && !groups.length ? <p className="rounded-3xl border border-dashed border-zinc-200 bg-white p-6 text-sm text-zinc-500">No backend results for this search.</p> : null}
+        {query.length >= 2 && !loading && !groups.length ? <p className="rounded-3xl border border-dashed border-zinc-200 bg-white p-6 text-sm text-zinc-500">No matching results.</p> : null}
       </section>
     </PageShell>
   );

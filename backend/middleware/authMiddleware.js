@@ -1,11 +1,12 @@
 const User = require('../models/User');
+const { requireClerkAuth } = require('./clerkJwt');
 
-exports.requireAuth = async (req, res, next) => {
+const loadUser = async (req, res, next) => {
   try {
-    const clerkUserId = req.header('x-clerk-user-id');
+    const clerkUserId = req.auth?.userId;
 
     if (!clerkUserId) {
-      return res.status(401).json({ error: 'Missing authentication header' });
+      return res.status(401).json({ error: 'Missing authenticated Clerk user' });
     }
 
     const user = await User.findOne({ clerkUserId }).lean();
@@ -20,3 +21,6 @@ exports.requireAuth = async (req, res, next) => {
     return res.status(500).json({ error: 'Authentication failed' });
   }
 };
+
+exports.requireAuth = [requireClerkAuth, loadUser];
+exports.loadUser = loadUser;

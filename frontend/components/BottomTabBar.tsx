@@ -2,22 +2,19 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, QrCode, Wallet } from 'lucide-react';
-
-const tabs = [
-  { href: '/', label: 'Home', icon: Home },
-  { href: '/tickets', label: 'Tickets', icon: QrCode },
-  { href: '/wallet', label: 'Wallet', icon: Wallet }
-];
+import { Circle } from 'lucide-react';
+import { navForRole } from '@/lib/roles';
+import { useAppRole } from '@/lib/useAppRole';
 
 export default function BottomTabBar() {
   const pathname = usePathname();
+  const { role } = useAppRole();
+  const tabs = navForRole(role).slice(0, 4);
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-md border-t border-zinc-200 bg-white">
-      <div className="grid grid-cols-3">
+      <div className="grid grid-cols-4">
         {tabs.map((tab) => {
-          const Icon = tab.icon;
           const active = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
 
           return (
@@ -28,7 +25,7 @@ export default function BottomTabBar() {
                 active ? 'text-black' : 'text-zinc-500'
               }`}
             >
-              <Icon size={18} />
+              <Circle size={12} fill="currentColor" />
               <span>{tab.label}</span>
             </Link>
           );

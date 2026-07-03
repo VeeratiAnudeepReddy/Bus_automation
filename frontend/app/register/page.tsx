@@ -1,87 +1,98 @@
 'use client';
 
-import { useUser } from '@clerk/nextjs';
+import { Building2, Ticket, UserPlus } from 'lucide-react';
+import { useAuth, useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
-import { FormEvent, useState } from 'react';
 import toast from 'react-hot-toast';
 import PageShell from '@/components/PageShell';
 import ActionButton from '@/components/ActionButton';
 import { apiService } from '@/lib/api';
-import { formatCurrency } from '@/lib/format';
+import { useAppRole } from '@/lib/useAppRole';
+
+const cards = [
+  {
+    key: 'customer',
+    icon: Ticket,
+    title: 'I want to book bus tickets',
+    description: 'Create a customer account for bookings, wallet, tickets, coupons, and refunds.',
+    permissions: 'Booking, wallet, tickets, coupons'
+  },
+  {
+    key: 'employee',
+    icon: UserPlus,
+    title: 'I was invited by my organization',
+    description: 'Employees join only through an invitation link. Your organization assigns your role.',
+    permissions: 'Requires a valid invite link'
+  },
+  {
+    key: 'owner',
+    icon: Building2,
+    title: 'I own or manage a transport organization',
+    description: 'Create an organization workspace, business profile, users, fleet, pricing, finance, and reports.',
+    permissions: 'Requires super admin approval after first setup'
+  }
+];
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { isLoaded, user } = useUser();
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [registered, setRegistered] = useState<{ userId: string; balance: number } | null>(null);
+  const { user, isLoaded } = useUser();
+  const { getToken } = useAuth();
+  const { refreshAuth } = useAppRole();
 
-  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!user) {
+  const choose = async (key: string) => {
+    if (!user) return;
+    if (key === 'employee') {
+      router.push('/accept-invite');
       return;
     }
-
-    setLoading(true);
+    if (key === 'owner') {
+      router.push('/organizations/new');
+      return;
+    }
     try {
-      const response = await apiService.syncUser({
-        clerkUserId: user.id,
-        name: name.trim(),
+      const token = await getToken();
+      if (!token) throw new Error('Missing Clerk token');
+      await apiService.createCustomerAccount({
+        authToken: token,
+        name: user.fullName || 'Bus User',
         email: user.primaryEmailAddress?.emailAddress || '',
-        phone: phone.trim()
+        phone: user.primaryPhoneNumber?.phoneNumber
       });
-      setRegistered({ userId: response._id, balance: response.balance });
-      toast.success('Registration completed');
+      await refreshAuth();
+      toast.success('Customer account created');
+      router.replace('/complete-profile');
     } catch {
-      toast.error('Registration failed');
-    } finally {
-      setLoading(false);
+      toast.error('Unable to create customer account');
     }
   };
 
-  if (!isLoaded || !user) {
-    return <PageShell showTabs={false} />;
-  }
+  if (!isLoaded) return <PageShell showTabs={false} />;
 
   return (
     <PageShell showTabs={false}>
-      <section className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
-        <h1 className="text-xl font-semibold text-zinc-900">User Registration</h1>
-        <p className="mt-1 text-sm text-zinc-600">Complete your profile to activate BusQR.</p>
-        <form className="mt-5 space-y-3" onSubmit={(event) => void onSubmit(event)}>
-          <input
-            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm outline-none focus:border-black"
-            placeholder="Full Name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            required
-          />
-          <input
-            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm outline-none focus:border-black"
-            placeholder="Phone Number"
-            value={phone}
-            onChange={(event) => setPhone(event.target.value)}
-            required
-          />
-          <ActionButton className="w-full" disabled={loading} type="submit">
-            {loading ? 'Registering...' : 'Register'}
-          </ActionButton>
-        </form>
+      <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+        <p className="text-xs font-medium uppercase text-zinc-500">Choose Identity</p>
+        <h1 className="mt-2 text-2xl font-semibold text-zinc-900">What are you here to do?</h1>
+        <p className="mt-2 text-sm text-zinc-600">Authentication only proves who you are. This step creates the correct application account.</p>
       </section>
-
-      {registered ? (
-        <section className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5">
-          <h2 className="text-sm font-semibold text-emerald-900">Registration Successful</h2>
-          <p className="mt-1 text-sm text-emerald-800">User ID: {registered.userId}</p>
-          <p className="text-sm text-emerald-800">
-            Wallet Balance: {formatCurrency(registered.balance)}
-          </p>
-          <ActionButton className="mt-3 w-full" onClick={() => router.push('/')}>
-            Go to Home
-          </ActionButton>
-        </section>
-      ) : null}
+      <section className="grid gap-3">
+        {cards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <div key={card.key} className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="rounded-xl bg-zinc-100 p-3"><Icon size={20} /></div>
+                <div>
+                  <h2 className="text-base font-semibold text-zinc-900">{card.title}</h2>
+                  <p className="mt-1 text-sm text-zinc-600">{card.description}</p>
+                  <p className="mt-2 text-xs font-medium text-zinc-500">{card.permissions}</p>
+                </div>
+              </div>
+              <ActionButton className="mt-4 w-full" onClick={() => void choose(card.key)}>Continue</ActionButton>
+            </div>
+          );
+        })}
+      </section>
     </PageShell>
   );
 }

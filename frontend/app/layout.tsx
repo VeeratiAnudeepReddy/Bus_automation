@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "react-hot-toast";
+import AuthGate from "@/components/AuthGate";
 
 export const metadata: Metadata = {
   title: "BusQR - Smart Bus Ticketing",
@@ -17,7 +18,7 @@ export default function RootLayout({
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full">
         <ClerkProvider>
-          {children}
+          <AuthGate>{children}</AuthGate>
           <Toaster position="top-center" />
         </ClerkProvider>
       </body>

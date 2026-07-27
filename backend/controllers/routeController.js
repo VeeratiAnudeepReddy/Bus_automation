@@ -1,5 +1,6 @@
 const Route = require('../models/Route');
 const FareHistory = require('../models/FareHistory');
+const { resolveOrganizationId } = require('../utils/defaultOrganization');
 
 const HYDERABAD = 'Hyderabad';
 const hyderabadSeedRoutes = [
@@ -77,44 +78,60 @@ const serializeRoute = (route) => ({
   updatedAt: route.updatedAt
 });
 
-const ensureHyderabadSeedRoutes = async () => {
-  const operations = hyderabadSeedRoutes.map((seed) => ({
-    updateOne: {
-      filter: {
-        city: HYDERABAD,
-        fromNormalized: normalizeStopLower(seed.from),
-        toNormalized: normalizeStopLower(seed.to)
-      },
-      update: {
-        $setOnInsert: {
-          from: seed.from,
-          to: seed.to,
-          fromNormalized: normalizeStopLower(seed.from),
-          toNormalized: normalizeStopLower(seed.to),
-          fare: seed.fare,
-          city: HYDERABAD,
-          active: true,
-          fromCoords: seed.fromCoords,
-          toCoords: seed.toCoords
-        }
-      },
-      upsert: true
-    }
-  }));
+const ensureHyderabadSeedRoutes = async (organizationId) => {
+  for (const seed of hyderabadSeedRoutes) {
+    const fromNormalized = normalizeStopLower(seed.from);
+    const toNormalized = normalizeStopLower(seed.to);
+    const routeIdentity = {
+      city: HYDERABAD,
+      fromNormalized,
+      toNormalized
+    };
+    const insertDefaults = {
+      from: seed.from,
+      to: seed.to,
+      fromNormalized,
+      toNormalized,
+      fare: seed.fare,
+      city: HYDERABAD,
+      active: true,
+      fromCoords: seed.fromCoords,
+      toCoords: seed.toCoords,
+      organizationId
+    };
 
-  if (operations.length) {
-    await Route.bulkWrite(operations, { ordered: false });
+    try {
+      await Route.updateOne(
+        { organizationId, ...routeIdentity },
+        { $setOnInsert: insertDefaults },
+        { upsert: true }
+      );
+    } catch (error) {
+      if (error.code !== 11000) {
+        throw error;
+      }
+
+      // Older databases may still have a pre-organization unique index on
+      // city/fromNormalized/toNormalized. Attach matching legacy seed rows to
+      // this organization instead of failing every route-list request.
+      await Route.updateOne(
+        { ...routeIdentity, organizationId: { $in: [organizationId, null] } },
+        { $set: { organizationId } },
+        { upsert: false }
+      );
+    }
   }
 };
 
 exports.getRoutesForUser = async (req, res) => {
   try {
-    await ensureHyderabadSeedRoutes();
+    const organizationId = await resolveOrganizationId(req.user);
+    await ensureHyderabadSeedRoutes(organizationId);
     const city = normalizeStop(req.query.city || HYDERABAD) || HYDERABAD;
     const from = normalizeStop(req.query.from);
     const to = normalizeStop(req.query.to);
 
-    const query = { active: true, city };
+    const query = { active: true, city, organizationId };
     if (from) {
       query.fromNormalized = normalizeStopLower(from);
     }
@@ -123,7 +140,7 @@ exports.getRoutesForUser = async (req, res) => {
     }
 
     const routes = await Route.find(query).sort({ from: 1, to: 1 }).lean();
-    const activeRoutesInCity = await Route.find({ city, active: true })
+    const activeRoutesInCity = await Route.find({ city, active: true, organizationId })
       .select('from to fromCoords toCoords')
       .sort({ from: 1, to: 1 })
       .lean();
@@ -150,19 +167,20 @@ exports.getRoutesForUser = async (req, res) => {
       popularRoutes: routes.slice(0, 6).map(serializeRoute)
     });
   } catch (error) {
-    console.error('Get routes error:', error.message);
+    console.error('Get routes error:', error.stack || error.message);
     return res.status(500).json({ error: 'Failed to fetch routes' });
   }
 };
 
 exports.getAdminRoutes = async (req, res) => {
   try {
-    await ensureHyderabadSeedRoutes();
+    const organizationId = await resolveOrganizationId(req.user);
+    await ensureHyderabadSeedRoutes(organizationId);
     const city = normalizeStop(req.query.city || HYDERABAD) || HYDERABAD;
     const search = normalizeStop(req.query.search);
     const status = normalizeStop(req.query.status).toLowerCase();
 
-    const query = { city };
+    const query = { city, organizationId };
     if (status === 'active') {
       query.active = true;
     } else if (status === 'inactive') {
@@ -186,6 +204,7 @@ exports.getAdminRoutes = async (req, res) => {
 
 exports.createRoute = async (req, res) => {
   try {
+    const organizationId = await resolveOrganizationId(req.user);
     const from = normalizeStop(req.body.from);
     const to = normalizeStop(req.body.to);
     const city = normalizeStop(req.body.city || HYDERABAD) || HYDERABAD;
@@ -215,7 +234,8 @@ exports.createRoute = async (req, res) => {
       city,
       active: req.body.active !== false,
       fromCoords,
-      toCoords
+      toCoords,
+      organizationId
     });
 
     return res.status(201).json(serializeRoute(created.toObject()));
@@ -233,7 +253,8 @@ exports.createRoute = async (req, res) => {
 
 exports.updateRoute = async (req, res) => {
   try {
-    const existing = await Route.findById(req.params.id);
+    const organizationId = await resolveOrganizationId(req.user);
+    const existing = await Route.findOne({ _id: req.params.id, organizationId });
     if (!existing) {
       return res.status(404).json({ error: 'Route not found' });
     }
@@ -281,7 +302,11 @@ exports.updateRoute = async (req, res) => {
       updates.toCoords = parseCoords(req.body.toCoords, 'to');
     }
 
-    const updated = await Route.findByIdAndUpdate(req.params.id, { $set: updates }, { new: true }).lean();
+    const updated = await Route.findOneAndUpdate(
+      { _id: req.params.id, organizationId },
+      { $set: updates },
+      { new: true }
+    ).lean();
 
     if (
       updates.fare !== undefined &&
@@ -291,7 +316,8 @@ exports.updateRoute = async (req, res) => {
         routeId: existing._id,
         previousFare: existing.fare,
         newFare: updates.fare,
-        updatedBy: req.user._id
+        updatedBy: req.user._id,
+        organizationId: existing.organizationId
       });
     }
 
@@ -310,7 +336,8 @@ exports.updateRoute = async (req, res) => {
 
 exports.deleteRoute = async (req, res) => {
   try {
-    const removed = await Route.findByIdAndDelete(req.params.id).lean();
+    const organizationId = await resolveOrganizationId(req.user);
+    const removed = await Route.findOneAndDelete({ _id: req.params.id, organizationId }).lean();
     if (!removed) {
       return res.status(404).json({ error: 'Route not found' });
     }
@@ -323,12 +350,13 @@ exports.deleteRoute = async (req, res) => {
 
 exports.toggleRoute = async (req, res) => {
   try {
-    const existing = await Route.findById(req.params.id).lean();
+    const organizationId = await resolveOrganizationId(req.user);
+    const existing = await Route.findOne({ _id: req.params.id, organizationId }).lean();
     if (!existing) {
       return res.status(404).json({ error: 'Route not found' });
     }
-    const updated = await Route.findByIdAndUpdate(
-      req.params.id,
+    const updated = await Route.findOneAndUpdate(
+      { _id: req.params.id, organizationId },
       { $set: { active: !existing.active } },
       { new: true }
     ).lean();
@@ -341,8 +369,9 @@ exports.toggleRoute = async (req, res) => {
 
 exports.getFareHistory = async (req, res) => {
   try {
+    const organizationId = await resolveOrganizationId(req.user);
     const routeId = req.query.routeId;
-    const query = routeId ? { routeId } : {};
+    const query = routeId ? { routeId, organizationId } : { organizationId };
     const logs = await FareHistory.find(query)
       .sort({ createdAt: -1 })
       .limit(100)

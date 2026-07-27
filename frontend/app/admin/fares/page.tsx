@@ -7,6 +7,7 @@ import ActionButton from '@/components/ActionButton';
 import { apiService, RouteItem } from '@/lib/api';
 import { useAppRole } from '@/lib/useAppRole';
 import { formatCurrency } from '@/lib/format';
+import { isFareManagerRole } from '@/lib/roles';
 
 type RouteForm = {
   from: string;
@@ -29,7 +30,7 @@ const emptyForm: RouteForm = {
 };
 
 export default function FareManagementPage() {
-  const { isLoaded, user, role, ready } = useAppRole();
+  const { isLoaded, user, role, ready, getToken } = useAppRole();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [routes, setRoutes] = useState<RouteItem[]>([]);
@@ -40,7 +41,7 @@ export default function FareManagementPage() {
   const [editing, setEditing] = useState<RouteItem | null>(null);
   const [editForm, setEditForm] = useState<RouteForm>(emptyForm);
 
-  const allowed = role === 'admin' || role === 'fare_manager';
+  const allowed = isFareManagerRole(role);
 
   const loadRoutes = useCallback(async () => {
     if (!user) {
@@ -48,7 +49,11 @@ export default function FareManagementPage() {
     }
     setLoading(true);
     try {
-      const data = await apiService.getAdminRoutes(user.id, {
+      const authToken = await getToken();
+      if (!authToken) {
+        throw new Error('Missing Clerk token');
+      }
+      const data = await apiService.getAdminRoutes(authToken, {
         search: search || undefined,
         status
       });
@@ -58,7 +63,7 @@ export default function FareManagementPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, status, user]);
+  }, [getToken, search, status, user]);
 
   useEffect(() => {
     if (!isLoaded || !ready || !user || !allowed) {
@@ -89,7 +94,11 @@ export default function FareManagementPage() {
     }
     setSaving(true);
     try {
-      await apiService.createAdminRoute(user.id, toPayload(createForm));
+      const authToken = await getToken();
+      if (!authToken) {
+        throw new Error('Missing Clerk token');
+      }
+      await apiService.createAdminRoute(authToken, toPayload(createForm));
       toast.success('Route added');
       setShowCreate(false);
       resetCreateForm();
@@ -121,7 +130,11 @@ export default function FareManagementPage() {
     }
     setSaving(true);
     try {
-      await apiService.updateAdminRoute(user.id, editing._id, toPayload(editForm));
+      const authToken = await getToken();
+      if (!authToken) {
+        throw new Error('Missing Clerk token');
+      }
+      await apiService.updateAdminRoute(authToken, editing._id, toPayload(editForm));
       toast.success('Route updated');
       setEditing(null);
       await loadRoutes();
@@ -138,7 +151,11 @@ export default function FareManagementPage() {
     }
     setSaving(true);
     try {
-      await apiService.deleteAdminRoute(user.id, route._id);
+      const authToken = await getToken();
+      if (!authToken) {
+        throw new Error('Missing Clerk token');
+      }
+      await apiService.deleteAdminRoute(authToken, route._id);
       toast.success('Route deleted');
       await loadRoutes();
     } catch {
@@ -154,7 +171,11 @@ export default function FareManagementPage() {
     }
     setSaving(true);
     try {
-      await apiService.toggleAdminRoute(user.id, route._id);
+      const authToken = await getToken();
+      if (!authToken) {
+        throw new Error('Missing Clerk token');
+      }
+      await apiService.toggleAdminRoute(authToken, route._id);
       toast.success(route.active ? 'Route disabled' : 'Route enabled');
       await loadRoutes();
     } catch {

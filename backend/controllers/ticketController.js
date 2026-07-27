@@ -5,6 +5,14 @@ const config = require('../config');
 const User = require('../models/User');
 const Ticket = require('../models/Ticket');
 const Route = require('../models/Route');
+const ValidationLog = require('../models/ValidationLog');
+const { resolveOrganizationId } = require('../utils/defaultOrganization');
+const { calculateFare } = require('../services/pricingService');
+const { recordWalletTransaction } = require('../services/walletService');
+const BookingHistory = require('../models/BookingHistory');
+const Invoice = require('../models/Invoice');
+const Receipt = require('../models/Receipt');
+const logger = require('../utils/logger');
 
 const TICKET_PRICE = Number(config.FARE) || 20;
 const MAX_TICKETS_PER_BOOKING = 20;
@@ -64,6 +72,7 @@ exports.bookTickets = async (req, res) => {
   const session = await mongoose.startSession();
   let n = 1;
   let ticketFare = TICKET_PRICE;
+  let totalAmount = 0;
 
   try {
     n = Number(req.body.count ?? 1);
@@ -84,12 +93,14 @@ exports.bookTickets = async (req, res) => {
     const fromInput = normalizeStop(req.body.from);
     const toInput = normalizeStop(req.body.to);
     const wantsRouteAwareBooking = Boolean(routeId || fromInput || toInput);
+    const organizationId = await resolveOrganizationId(req.user);
 
     if (wantsRouteAwareBooking) {
       if (routeId) {
-        selectedRoute = await Route.findOne({ _id: routeId, active: true }).lean();
+        selectedRoute = await Route.findOne({ _id: routeId, active: true, organizationId }).lean();
       } else if (fromInput && toInput) {
         selectedRoute = await Route.findOne({
+          organizationId,
           active: true,
           fromNormalized: normalizeStopLower(fromInput),
           toNormalized: normalizeStopLower(toInput)
@@ -107,19 +118,40 @@ exports.bookTickets = async (req, res) => {
       toCoords = parseTicketCoords(req.body.toCoords, selectedRoute.toCoords);
     }
 
-    const totalAmount = n * ticketFare;
+    const passengerType = req.body.passengerType || 'adult';
+    const pricing = await calculateFare({
+      organizationId,
+      baseFare: ticketFare,
+      routeId: selectedRoute?._id || null,
+      passengerType,
+      couponCode: req.body.couponCode || null,
+      userId: req.user._id,
+      count: n
+    });
+    if (!pricing.valid) {
+      return res.status(400).json({ error: pricing.error });
+    }
+
+    ticketFare = pricing.fare;
+    totalAmount = pricing.totalAmount;
+    const bookingId = `BK-${Date.now()}-${uuidv4().slice(0, 8)}`;
+    const qrExpiresAt = new Date(Date.now() + 30 * 60 * 1000);
     const nowIso = new Date().toISOString();
 
     const ticketDrafts = Array.from({ length: n }, () => {
       const ticketId = uuidv4();
       return {
         ticketId,
+        bookingId,
         userId: req.user._id,
         routeId: selectedRoute?._id || null,
+        organizationId,
         from,
         to,
+        passengerType,
         status: 'ACTIVE',
         fare: ticketFare,
+        qrExpiresAt,
         fromCoords,
         toCoords,
         qrPayload: {
@@ -129,7 +161,9 @@ exports.bookTickets = async (req, res) => {
           routeId: selectedRoute ? String(selectedRoute._id) : null,
           from,
           to,
-          fare: ticketFare
+          fare: ticketFare,
+          expiresAt: qrExpiresAt.toISOString(),
+          encrypted: true
         }
       };
     });
@@ -145,34 +179,60 @@ exports.bookTickets = async (req, res) => {
       )
     );
 
-    let updatedUser;
+    let walletTransaction;
     let createdTickets = [];
 
     await session.withTransaction(async () => {
-      updatedUser = await User.findOneAndUpdate(
-        { _id: req.user._id, balance: { $gte: totalAmount } },
-        { $inc: { balance: -totalAmount } },
-        { new: true, session, select: '_id balance' }
-      );
-
-      if (!updatedUser) {
-        throw new Error('INSUFFICIENT_BALANCE');
-      }
-
+      walletTransaction = await recordWalletTransaction({
+        organizationId,
+        userId: req.user._id,
+        type: 'debit',
+        amount: totalAmount,
+        referenceType: 'booking',
+        referenceId: bookingId,
+        notes: 'Ticket booking',
+        session
+      });
       createdTickets = await Ticket.insertMany(ticketDrafts, { session });
+      await BookingHistory.create(
+        [{ organizationId, bookingId, userId: req.user._id, action: 'created', after: { count: n, pricing } }],
+        { session }
+      );
+      await Invoice.create(
+        [{
+          organizationId,
+          bookingId,
+          userId: req.user._id,
+          invoiceNumber: `INV-${Date.now()}`,
+          subtotal: pricing.subtotal,
+          tax: 0,
+          total: pricing.totalAmount,
+          lineItems: [{ label: from && to ? `${from} to ${to}` : 'Bus ticket', quantity: n, amount: pricing.totalAmount }]
+        }],
+        { session }
+      );
+      await Receipt.create(
+        [{ organizationId, bookingId, userId: req.user._id, receiptNumber: `RCT-${Date.now()}`, amount: pricing.totalAmount, method: 'wallet' }],
+        { session }
+      );
     });
 
     return res.status(200).json({
       ticketPrice: ticketFare,
       count: n,
       totalAmount,
-      balance: updatedUser.balance,
+      discount: pricing.discount,
+      coupon: pricing.coupon,
+      bookingId,
+      balance: walletTransaction.balanceAfter,
       tickets: createdTickets.map((ticket, index) => ({
         ticketId: ticket.ticketId,
+        bookingId: ticket.bookingId,
         userId: ticket.userId,
         routeId: ticket.routeId,
         from: ticket.from,
         to: ticket.to,
+        passengerType: ticket.passengerType,
         status: ticket.status,
         fare: ticket.fare,
         fromCoords: ticket.fromCoords,
@@ -188,7 +248,7 @@ exports.bookTickets = async (req, res) => {
       return res.status(400).json({
         error: 'Insufficient balance',
         balance: latestUser?.balance ?? 0,
-        required: n * ticketFare
+        required: totalAmount || n * ticketFare
       });
     }
 
@@ -209,10 +269,12 @@ exports.getMyTickets = async (req, res) => {
     const ticketsWithQr = await Promise.all(
       tickets.map(async (ticket) => ({
         ticketId: ticket.ticketId,
+        bookingId: ticket.bookingId,
         userId: ticket.userId,
         routeId: ticket.routeId,
         from: ticket.from || null,
         to: ticket.to || null,
+        passengerType: ticket.passengerType || 'adult',
         status: ticket.status,
         fare: ticket.fare,
         fromCoords: ticket.fromCoords || null,
@@ -240,6 +302,14 @@ exports.getMyTickets = async (req, res) => {
   }
 };
 
+async function recordValidationLog({ ticketId, userId = null, status, scannedAt = new Date() }) {
+  try {
+    await ValidationLog.create({ ticketId, userId, status, scannedAt });
+  } catch (error) {
+    logger.error('validation_log_write_failed', { ticketId, status, error: error.message });
+  }
+}
+
 exports.scanTicket = async (req, res) => {
   try {
     const ticketId = parseTicketIdFromScan(req.body.scannedData);
@@ -248,13 +318,32 @@ exports.scanTicket = async (req, res) => {
     }
 
     const scannedAt = new Date();
+    const gps = parseTicketCoords(req.body.gps);
     const updated = await Ticket.findOneAndUpdate(
       { ticketId, status: 'ACTIVE' },
-      { $set: { status: 'USED', scannedAt, scannedBy: req.user._id } },
+      {
+        $set: { status: 'USED', scannedAt, scannedBy: req.user._id },
+        $push: {
+          scanHistory: {
+            scannedAt,
+            scannedBy: req.user._id,
+            deviceId: req.body.deviceId || null,
+            ip: req.ip,
+            gps,
+            result: 'VALID'
+          }
+        }
+      },
       { new: true, select: 'ticketId userId status scannedAt createdAt' }
     ).lean();
 
     if (updated) {
+      await recordValidationLog({
+        ticketId,
+        userId: updated.userId,
+        status: 'VALID',
+        scannedAt
+      });
       const ticketUser = await User.findById(updated.userId).select('name').lean();
       return res.status(200).json({
         result: 'VALID',
@@ -265,11 +354,18 @@ exports.scanTicket = async (req, res) => {
       });
     }
 
-    const existing = await Ticket.findOne({ ticketId }).select('status').lean();
+    const existing = await Ticket.findOne({ ticketId }).select('status userId').lean();
     if (!existing) {
+      await recordValidationLog({ ticketId, status: 'INVALID', scannedAt });
       return res.status(200).json({ result: 'INVALID' });
     }
 
+    await recordValidationLog({
+      ticketId,
+      userId: existing.userId,
+      status: 'ALREADY_USED',
+      scannedAt
+    });
     return res.status(200).json({ result: 'REJECT' });
   } catch (error) {
     console.error('Scan ticket error:', error.message);

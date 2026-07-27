@@ -42,7 +42,7 @@ Update your `.env.local` file:
 
 ```bash
 # Replace with your actual keys from Clerk Dashboard
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_YourPublishableKeyHere
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_YOUR_PUBLISHABLE_KEY
 CLERK_SECRET_KEY=sk_test_YourSecretKeyHere
 ```
 

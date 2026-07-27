@@ -17,6 +17,10 @@ node_modules/
 # Misc
 .DS_Store
 *.pem
+files.zip
+image.png
+_HARDENING_NOTES.md
+_AUDIT_WORKING_NOTES.md
 
 # Debug
 npm-debug.log*

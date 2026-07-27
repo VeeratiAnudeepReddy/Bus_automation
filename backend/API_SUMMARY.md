@@ -264,7 +264,7 @@ GET /
 
 ### Environment Variables (.env)
 ```env
-MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/dbname
+MONGO_URI=mongodb+srv://USER:PASSWORD@cluster.example.mongodb.net/dbname
 PORT=5001
 FARE=10
 ```

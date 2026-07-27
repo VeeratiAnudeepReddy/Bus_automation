@@ -12,6 +12,7 @@ import ScannerCard from '@/components/ScannerCard';
 import { apiService, ScanResult } from '@/lib/api';
 import { addActivity } from '@/lib/activity';
 import { useAppRole } from '@/lib/useAppRole';
+import { isFareManagerRole, isScannerRole } from '@/lib/roles';
 
 type Analytics = {
   totalScannedTickets: number;
@@ -21,14 +22,14 @@ type Analytics = {
 const scannerId = 'admin-busqr-scanner';
 
 export default function AdminPage() {
-  const { isLoaded, user, role, ready } = useAppRole();
+  const { isLoaded, user, role, ready, getToken } = useAppRole();
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [data, setData] = useState<Analytics | null>(null);
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [scanning, setScanning] = useState(false);
   const [manual, setManual] = useState('');
   const [result, setResult] = useState<ScanResult | null>(null);
-  const isScannerAdmin = role === 'admin';
+  const isScannerAdmin = isScannerRole(role);
 
   useEffect(() => {
     const load = async () => {
@@ -40,16 +41,20 @@ export default function AdminPage() {
         return;
       }
 
-      if (role !== 'admin' && role !== 'fare_manager') {
+      if (!isScannerRole(role) && !isFareManagerRole(role)) {
         setAllowed(false);
         return;
       }
 
       setAllowed(true);
 
-      if (role === 'admin') {
+      if (isScannerRole(role)) {
         try {
-          setData(await apiService.getAdminAnalytics(user.id));
+          const authToken = await getToken();
+          if (!authToken) {
+            throw new Error('Missing Clerk token');
+          }
+          setData(await apiService.getAdminAnalytics(authToken));
         } catch {
           setData(null);
         }
@@ -63,7 +68,7 @@ export default function AdminPage() {
         void scannerRef.current.stop().catch(() => undefined);
       }
     };
-  }, [isLoaded, ready, role, user]);
+  }, [getToken, isLoaded, ready, role, user]);
 
   const validateTicket = async (payload: string) => {
     if (!user) {
@@ -74,9 +79,13 @@ export default function AdminPage() {
       return;
     }
     try {
-      const response = await apiService.scanTicket(user.id, payload);
+      const authToken = await getToken();
+      if (!authToken) {
+        throw new Error('Missing Clerk token');
+      }
+      const response = await apiService.scanTicket(authToken, payload);
       setResult(response);
-      setData(await apiService.getAdminAnalytics(user.id));
+      setData(await apiService.getAdminAnalytics(authToken));
       addActivity({
         title: `Admin Scan ${response.result}`,
         subtitle: response.ticket?.ticketId || payload
@@ -138,6 +147,12 @@ export default function AdminPage() {
             <div className="rounded-xl border border-zinc-200 p-3">Analytics</div>
             <Link href="/admin/fares" className="rounded-xl border border-zinc-200 p-3 font-medium text-zinc-900">
               Fare Management
+            </Link>
+            <Link href="/organization" className="rounded-xl border border-zinc-200 p-3 font-medium text-zinc-900">
+              Organization Management
+            </Link>
+            <Link href="/operations" className="rounded-xl border border-zinc-200 p-3 font-medium text-zinc-900">
+              Fleet Operations
             </Link>
           </div>
         )}

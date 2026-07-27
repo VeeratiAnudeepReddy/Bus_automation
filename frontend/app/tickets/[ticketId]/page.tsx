@@ -1,7 +1,6 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import PageShell from '@/components/PageShell';
@@ -9,6 +8,7 @@ import ActionButton from '@/components/ActionButton';
 import QRCard from '@/components/QRCard';
 import { apiService, TicketItem } from '@/lib/api';
 import { useAppRole } from '@/lib/useAppRole';
+import { isStaffRole } from '@/lib/roles';
 
 function ticketViewStatus(ticket: TicketItem): 'ACTIVE' | 'USED' | 'EXPIRED' {
   if (ticket.status === 'USED') {
@@ -20,8 +20,7 @@ function ticketViewStatus(ticket: TicketItem): 'ACTIVE' | 'USED' | 'EXPIRED' {
 
 export default function TicketDetailsPage() {
   const params = useParams<{ ticketId: string }>();
-  const router = useRouter();
-  const { isLoaded, user, role, ready } = useAppRole();
+  const { appUser, isLoaded, user, role, getToken } = useAppRole();
   const [ticket, setTicket] = useState<TicketItem | null>(null);
   const [passengerName, setPassengerName] = useState('Passenger');
 
@@ -30,34 +29,24 @@ export default function TicketDetailsPage() {
       if (!isLoaded || !user) {
         return;
       }
-      if (role === 'admin' || role === 'fare_manager') {
+      if (isStaffRole(role)) {
         return;
       }
       try {
-        const [myTickets, appUser] = await Promise.all([
-          apiService.getMyTickets(user.id),
-          apiService.syncUser({
-            clerkUserId: user.id,
-            name: user.fullName || 'Bus User',
-            email: user.primaryEmailAddress?.emailAddress || '',
-            phone: user.primaryPhoneNumber?.phoneNumber
-          })
-        ]);
+        const authToken = await getToken();
+        if (!authToken) {
+          throw new Error('Missing Clerk token');
+        }
+        const myTickets = await apiService.getMyTickets(authToken);
         setTicket(myTickets.tickets.find((item) => item.ticketId === params.ticketId) || null);
-        setPassengerName(appUser.name);
+        setPassengerName(appUser?.name || user.fullName || 'Passenger');
       } catch {
         toast.error('Unable to load ticket');
       }
     };
 
     void load();
-  }, [isLoaded, params.ticketId, role, user]);
-
-  useEffect(() => {
-    if (ready && (role === 'admin' || role === 'fare_manager')) {
-      router.replace('/admin');
-    }
-  }, [ready, role, router]);
+  }, [appUser?.name, getToken, isLoaded, params.ticketId, role, user]);
 
   const status = useMemo(() => (ticket ? ticketViewStatus(ticket) : 'ACTIVE'), [ticket]);
 

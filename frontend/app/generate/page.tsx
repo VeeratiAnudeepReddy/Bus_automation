@@ -5,7 +5,6 @@ import { CheckCircle2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import PageShell from '@/components/PageShell';
 import ActionButton from '@/components/ActionButton';
@@ -14,6 +13,7 @@ import { apiService, RouteItem, StopItem, TicketItem } from '@/lib/api';
 import { addActivity } from '@/lib/activity';
 import { formatCurrency } from '@/lib/format';
 import { useAppRole } from '@/lib/useAppRole';
+import { isStaffRole } from '@/lib/roles';
 
 const RouteMapPicker = dynamic(() => import('@/components/RouteMapPicker'), { ssr: false });
 const RECENT_ROUTES_KEY = 'busqr-recent-routes';
@@ -32,8 +32,7 @@ const distanceInKm = (a: LatLng, b: LatLng) => {
 };
 
 export default function GenerateTicketPage() {
-  const router = useRouter();
-  const { isLoaded, user, role, ready } = useAppRole();
+  const { isLoaded, user, role, ready, getToken } = useAppRole();
   const [balance, setBalance] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -71,14 +70,18 @@ export default function GenerateTicketPage() {
       if (!isLoaded || !user) {
         return;
       }
-      if (role === 'admin' || role === 'fare_manager') {
+      if (isStaffRole(role)) {
         setLoading(false);
         return;
       }
       try {
+        const authToken = await getToken();
+        if (!authToken) {
+          throw new Error('Missing Clerk token');
+        }
         const [ticketData, routeData] = await Promise.all([
-          apiService.getMyTickets(user.id),
-          apiService.getRoutes(user.id, { city: 'Hyderabad' })
+          apiService.getMyTickets(authToken),
+          apiService.getRoutes(authToken, { city: 'Hyderabad' })
         ]);
         setBalance(ticketData.balance);
         setRoutes(routeData.routes);
@@ -90,13 +93,7 @@ export default function GenerateTicketPage() {
     };
 
     void load();
-  }, [isLoaded, role, user]);
-
-  useEffect(() => {
-    if (ready && (role === 'admin' || role === 'fare_manager')) {
-      router.replace('/admin');
-    }
-  }, [ready, role, router]);
+  }, [getToken, isLoaded, role, user]);
 
   const availableRoute = routes.find(
     (route) => route.active && route.from.toLowerCase() === fromStop.trim().toLowerCase() && route.to.toLowerCase() === toStop.trim().toLowerCase()
@@ -182,7 +179,11 @@ export default function GenerateTicketPage() {
 
     setSaving(true);
     try {
-      const response = await apiService.bookTickets(user.id, {
+      const authToken = await getToken();
+      if (!authToken) {
+        throw new Error('Missing Clerk token');
+      }
+      const response = await apiService.bookTickets(authToken, {
         count: 1,
         routeId: availableRoute._id,
         from: availableRoute.from,

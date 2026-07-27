@@ -1,0 +1,14 @@
+[Unit]
+Description=BusQR Backend
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/busqr/backend
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/npm run start:prod
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

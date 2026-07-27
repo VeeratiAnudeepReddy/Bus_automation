@@ -259,7 +259,7 @@ npm run dev
 ### Environment Variables Required
 ```bash
 # Backend (.env)
-MONGO_URI=mongodb+srv://...
+MONGO_URI=mongodb+srv://USER:PASSWORD@cluster.example.mongodb.net/dbname
 PORT=5001
 FARE=10
 
@@ -316,7 +316,7 @@ CLERK_SECRET_KEY=sk_live_...
 ### Backend (Railway/Heroku)
 ```bash
 # Set environment variables in hosting dashboard
-MONGO_URI=mongodb+srv://...
+MONGO_URI=mongodb+srv://USER:PASSWORD@cluster.example.mongodb.net/dbname
 PORT=5001
 FARE=10
 ```

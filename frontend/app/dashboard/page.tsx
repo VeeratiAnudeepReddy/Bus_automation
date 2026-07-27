@@ -1,6 +1,7 @@
-import { redirect } from 'next/navigation';
+'use client';
+
+import PageShell from '@/components/PageShell';
 
 export default function DashboardRedirectPage() {
-  redirect('/');
+  return <PageShell showTabs={false} />;
 }
-

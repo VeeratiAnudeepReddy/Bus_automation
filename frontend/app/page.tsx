@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { SignInButton, SignUpButton } from '@clerk/nextjs';
-import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { QrCode, Ticket, Wallet } from 'lucide-react';
 import PageShell from '@/components/PageShell';
@@ -11,10 +10,10 @@ import LoadingSkeleton from '@/components/LoadingSkeleton';
 import { apiService, TicketItem } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { useAppRole } from '@/lib/useAppRole';
+import { isStaffRole } from '@/lib/roles';
 
 export default function HomePage() {
-  const router = useRouter();
-  const { isLoaded, user, role, ready } = useAppRole();
+  const { isLoaded, user, role, ready, getToken } = useAppRole();
   const [loading, setLoading] = useState(true);
   const [balance, setBalance] = useState(0);
   const [tickets, setTickets] = useState<TicketItem[]>([]);
@@ -30,17 +29,20 @@ export default function HomePage() {
         return;
       }
 
-      if (role === 'admin' || role === 'fare_manager') {
+      if (isStaffRole(role)) {
         setLoading(false);
         return;
       }
 
       try {
-        const data = await apiService.getMyTickets(user.id);
+        const authToken = await getToken();
+        if (!authToken) {
+          throw new Error('Missing Clerk token');
+        }
+        const data = await apiService.getMyTickets(authToken);
         setBalance(data.balance);
         setTickets(data.tickets.slice(0, 3));
       } catch {
-        window.location.href = '/register';
         setLoading(false);
         return;
       }
@@ -49,13 +51,7 @@ export default function HomePage() {
     };
 
     void load();
-  }, [isLoaded, role, user]);
-
-  useEffect(() => {
-    if (ready && (role === 'admin' || role === 'fare_manager')) {
-      router.replace('/admin');
-    }
-  }, [ready, role, router]);
+  }, [getToken, isLoaded, role, user]);
 
   if (!isLoaded || !ready || loading) {
     return (

@@ -1,159 +1,63 @@
-# 🚀 Quick Start - Bus QR Ticketing System
+# Quick Start — Bus Automation Platform
 
-## ⚡ Start in 3 Steps
+## Start in 3 steps
 
-### 1. Start Backend
+### 1. Backend
 ```bash
-cd backend
-npm start
-```
-✅ Backend running on **http://localhost:5001**
-
-### 2. Start Frontend  
-```bash
-cd frontend
-npm run dev
-```
-✅ Frontend running on **http://localhost:3000**
-
-### 3. Test the App
-Open **http://localhost:3000** in your browser
-
----
-
-## 🎯 First-Time Setup
-
-If you haven't installed dependencies:
-
-```bash
-# Backend
 cd backend
 npm install
 npm start
+```
+Backend: **http://localhost:5001**
 
-# Frontend (in new terminal)
+### 2. Frontend
+```bash
 cd frontend
 npm install
 npm run dev
 ```
+Frontend: **http://localhost:3000**
+
+### 3. Open the app
+Visit **http://localhost:3000** and sign in with Clerk.
 
 ---
 
-## 🧪 Quick Test Flow
+## Current auth / API surface (not the old MVP)
 
-1. **Get a User ID**:
-   ```bash
-   curl -X POST http://localhost:5001/api/register \
-     -H "Content-Type: application/json" \
-     -d '{"name":"Test User"}'
-   ```
-   Copy the `_id` from the response.
+Legacy unauthenticated endpoints such as `POST /api/register` and `POST /api/recharge` are **removed**. Protected APIs expect a Clerk bearer token:
 
-2. **Recharge Wallet** (replace USER_ID):
-   ```bash
-   curl -X POST http://localhost:5001/api/recharge \
-     -H "Content-Type: application/json" \
-     -d '{"userId":"USER_ID","amount":100}'
-   ```
-
-3. **Generate Ticket**:
-   - Go to http://localhost:3000
-   - Enter your User ID
-   - Click "Generate Ticket"
-   - QR code appears!
-
-4. **Scan Ticket**:
-   - Go to http://localhost:3000/scanner
-   - Click "Start Scanner"
-   - Allow camera access
-   - Scan the QR code
-   - See validation result!
-
----
-
-## 📊 What's Included
-
-### Backend (Port 5001)
-- 9 API endpoints
-- MongoDB connected
-- Full validation system
-- User & wallet management
-
-### Frontend (Port 3000)
-- Modern premium UI
-- QR code generator
-- Real-time scanner
-- Color-coded validation
-
----
-
-## 🎨 Features
-
-✅ Generate QR tickets  
-✅ Scan with camera  
-✅ Instant validation  
-✅ Mobile responsive  
-✅ Premium design  
-
----
-
-## 📝 Documentation
-
-- **Full Details**: See `PROJECT_SUMMARY.md`
-- **Backend API**: See `backend/API_SUMMARY.md`
-- **Frontend**: See `frontend/README.md`
-
----
-
-## 🔧 Troubleshooting
-
-**Port already in use?**
 ```bash
-# Change backend port in backend/.env
-PORT=5002
+# Health (public)
+curl http://localhost:5001/health
+curl http://localhost:5001/ready
 
-# Change frontend port
-cd frontend
-npm run dev -- --port 3001
+# Protected example (requires real Clerk session JWT)
+curl http://localhost:5001/api/tickets/my \
+  -H "Authorization: Bearer <CLERK_SESSION_JWT>"
 ```
 
-**MongoDB connection error?**
-- Check internet connection
-- Verify credentials in `backend/.env`
-
-**Camera not working?**
-- Allow camera permissions
-- Use HTTPS in production
-- Try different browser
+First-run / account creation flows:
+- `/setup` — first organization
+- `/register` — choose customer / employee / org owner
+- `/accept-invite` — employee invite
+- `POST /api/auth/sync` — sync existing app user after Clerk login
 
 ---
 
-## ⚡ Production Deployment
+## Prerequisites
+- Node.js 18+
+- MongoDB (Atlas URI in `backend/.env` as `MONGO_URI`)
+- Clerk keys in `frontend/.env.local` and backend Clerk secret / JWKS access
+- Optional: Razorpay test keys for payment checkout
 
-### Backend
-```bash
-cd backend
-npm run build  # If applicable
-npm start
-```
+## Useful docs
+- `KNOWN_ISSUES.md` — remaining production gaps
+- `API_INDEX.md` — API inventory
+- `FIRST_RUN_SETUP.md` — onboarding
+- `STATE_OF_PROJECT_2026-07-27.md` — latest audit ground truth (after Phase 5)
 
-### Frontend
-```bash
-cd frontend
-npm run build
-npm start
-```
-
-Or deploy to:
-- **Frontend**: Vercel, Netlify
-- **Backend**: Heroku, Railway, Render
-
----
-
-**Status**: ✅ Ready to Run!
-
-**Servers**:
-- Backend: http://localhost:5001
-- Frontend: http://localhost:3000
-
-🎉 **Enjoy your Bus Ticketing System!**
+## Troubleshooting
+- **Port in use**: change `PORT` in `backend/.env`
+- **Mongo connection error**: check `MONGO_URI` and Atlas IP allowlist
+- **401 Missing bearer token**: expected without a Clerk JWT — not a server crash

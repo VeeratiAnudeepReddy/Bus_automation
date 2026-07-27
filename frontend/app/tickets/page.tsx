@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import TicketCard from '@/components/TicketCard';
 import { apiService, TicketItem } from '@/lib/api';
 import { useAppRole } from '@/lib/useAppRole';
+import { isStaffRole } from '@/lib/roles';
 
 function ticketViewStatus(ticket: TicketItem): 'ACTIVE' | 'USED' | 'EXPIRED' {
   if (ticket.status === 'USED') {
@@ -16,8 +16,7 @@ function ticketViewStatus(ticket: TicketItem): 'ACTIVE' | 'USED' | 'EXPIRED' {
 }
 
 export default function TicketsPage() {
-  const router = useRouter();
-  const { isLoaded, user, role, ready } = useAppRole();
+  const { isLoaded, user, role, ready, getToken } = useAppRole();
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -26,12 +25,16 @@ export default function TicketsPage() {
       if (!isLoaded || !user) {
         return;
       }
-      if (role === 'admin' || role === 'fare_manager') {
+      if (isStaffRole(role)) {
         setLoading(false);
         return;
       }
       try {
-        const data = await apiService.getMyTickets(user.id);
+        const authToken = await getToken();
+        if (!authToken) {
+          throw new Error('Missing Clerk token');
+        }
+        const data = await apiService.getMyTickets(authToken);
         setTickets(data.tickets);
       } finally {
         setLoading(false);
@@ -39,13 +42,7 @@ export default function TicketsPage() {
     };
 
     void load();
-  }, [isLoaded, role, user]);
-
-  useEffect(() => {
-    if (ready && (role === 'admin' || role === 'fare_manager')) {
-      router.replace('/admin');
-    }
-  }, [ready, role, router]);
+  }, [getToken, isLoaded, role, user]);
 
   return (
     <PageShell>

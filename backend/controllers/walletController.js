@@ -1,4 +1,5 @@
-const User = require('../models/User');
+const { recordWalletTransaction } = require('../services/walletService');
+const { resolveOrganizationId } = require('../utils/defaultOrganization');
 
 exports.addBalance = async (req, res) => {
   try {
@@ -13,15 +14,21 @@ exports.addBalance = async (req, res) => {
       return res.status(400).json({ error: 'amount exceeds testing limit' });
     }
 
-    const user = await User.findByIdAndUpdate(
-      req.user._id,
-      { $inc: { balance: addAmount } },
-      { new: true, select: '_id balance role name email' }
-    ).lean();
+    const organizationId = await resolveOrganizationId(req.user);
+    const transaction = await recordWalletTransaction({
+      organizationId,
+      userId: req.user._id,
+      type: 'recharge',
+      amount: addAmount,
+      referenceType: 'wallet',
+      referenceId: 'legacy-add',
+      notes: 'Wallet top-up'
+    });
 
     return res.status(200).json({
-      userId: user._id,
-      balance: user.balance
+      userId: req.user._id,
+      balance: transaction.balanceAfter,
+      transaction
     });
   } catch (error) {
     console.error('Add balance error:', error.message);

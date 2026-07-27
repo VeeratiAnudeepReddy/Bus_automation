@@ -31,7 +31,7 @@
 - [ ] Bind org Razorpay Route linked accounts where payouts must settle to operators.
 - [ ] Production SMTP (`EMAIL_PROVIDER=smtp`, `FEATURE_EMAIL=true`) — Ethereal is not production.
 - [ ] Restrict `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` by HTTP referrer in Google Cloud Console.
-- [ ] GitHub Actions `ci.yml` green on a real remote run (URL to be filled after push).
+- [x] GitHub Actions `ci.yml` green on real remote run: https://github.com/VeeratiAnudeepReddy/Bus_automation/actions/runs/30286888537
 - [ ] Docker prod compose up + smoke in staging.
 - [ ] Protect `/metrics` at network layer or set `METRICS_PUBLIC` intentionally.
 - [ ] Playwright/browser role coverage.

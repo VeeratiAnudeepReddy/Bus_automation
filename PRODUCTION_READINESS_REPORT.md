@@ -195,12 +195,14 @@ See file — only verified items marked.
 | Maps key | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` only (referrer restriction = human GCP console step) |
 
 ### 5. GitHub Actions CI
-See latest append after push — run URL/status required.
+| Done | Evidence |
+|---|---|
+| Real Actions run on push to `v1` | **success** — https://github.com/VeeratiAnudeepReddy/Bus_automation/actions/runs/30286888537 |
+| Jobs | `secret-scan` ✓ · `test` (backend tests, frontend lint/tsc/build) ✓ |
 
 ### Launch blockers after this follow-up
 1. **Rotate Clerk + Mongo credentials** (git history exposure) — deferred by instruction, still open.
 2. Interactive Hosted Checkout card completion in a real browser (UI wired; HMAC loop proven).
 3. Production public webhook URLs + live secrets for Razorpay/Clerk.
 4. Production SMTP (Ethereal is proof-of-delivery only).
-5. Confirm GitHub Actions green on real push.
-6. Restrict Maps API key by HTTP referrer in GCP.
+5. Restrict Maps API key by HTTP referrer in GCP.

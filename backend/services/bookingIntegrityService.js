@@ -15,12 +15,22 @@ async function transitionBooking({ organizationId, bookingId, to, actorId = null
 
 async function expireSeatLocksAndPayments() {
   const now = new Date();
+  // Payments created without expiresAt (pre-Sprint-9 rows) still stall forever unless we
+  // apply a fallback age cutoff aligned with the 15-minute hold window.
+  const fallbackCreatedBefore = new Date(now.getTime() - 15 * 60 * 1000);
   const expiredLocks = await SeatLock.updateMany(
     { status: 'active', expirationTime: { $lte: now } },
     { $set: { status: 'expired', paymentStatus: 'expired', releasedAt: now, reason: 'hold_expired' } }
   );
   const expiredPayments = await Payment.updateMany(
-    { status: 'created', expiresAt: { $lte: now } },
+    {
+      status: 'created',
+      $or: [
+        { expiresAt: { $lte: now } },
+        { expiresAt: null, createdAt: { $lte: fallbackCreatedBefore } },
+        { expiresAt: { $exists: false }, createdAt: { $lte: fallbackCreatedBefore } }
+      ]
+    },
     { $set: { status: 'expired', failedAt: now, failureReason: 'payment_timeout' } }
   );
   const expiredBookings = await BookingTransaction.find({ lifecycle: { $in: ['seat_hold', 'payment_pending'] }, expiresAt: { $lte: now } });

@@ -92,6 +92,21 @@ const organizationSchema = new mongoose.Schema(
       plan: { type: String, enum: ['trial', 'standard', 'enterprise'], default: 'trial' },
       status: { type: String, enum: ['trialing', 'active', 'past_due', 'cancelled'], default: 'trialing' },
       renewsAt: { type: Date, default: null }
+    },
+    /**
+     * Razorpay Route linked account for per-organization payouts.
+     * When linkedAccountId is missing/inactive, orders fall back to the platform account.
+     */
+    razorpayRoute: {
+      linkedAccountId: { type: String, default: null, trim: true, index: true },
+      status: {
+        type: String,
+        enum: ['none', 'pending', 'active', 'suspended'],
+        default: 'none',
+        index: true
+      },
+      onboardedAt: { type: Date, default: null },
+      notes: { type: String, default: null, trim: true }
     }
   },
   {

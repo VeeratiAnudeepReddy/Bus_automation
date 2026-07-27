@@ -627,3 +627,71 @@ export function TripTrackerMap({
     </MapView>
   );
 }
+
+export function MultiVehicleMap({
+  vehicles,
+  className = 'h-64'
+}: {
+  vehicles: Array<{ tripId: string; tripCode?: string; location?: GPSLocation | null }>;
+  className?: string;
+}) {
+  const markersRef = useRef<Map<string, MapMarker>>(new Map());
+  const positions = useMemo(() => {
+    const next: Array<{ tripId: string; tripCode?: string; position: LatLng }> = [];
+    for (const vehicle of vehicles) {
+      const position = asLatLng(vehicle.location || null);
+      if (!position) continue;
+      next.push({ tripId: vehicle.tripId, tripCode: vehicle.tripCode, position });
+    }
+    return next;
+  }, [vehicles]);
+
+  const handleReady = useCallback(({ google, map }: { google: GoogleApi; map: MapInstance }) => {
+    const local = new Map<string, MapMarker>();
+    positions.forEach((item, index) => {
+      const marker = new google.maps.Marker({
+        map,
+        position: item.position,
+        title: item.tripCode || item.tripId,
+        label: { text: String(index + 1), color: '#ffffff', fontWeight: '700' },
+        icon: busIcon(google)
+      });
+      local.set(item.tripId, marker);
+    });
+    markersRef.current = local;
+    fitToPoints(google, map, positions.map((item) => item.position));
+    return () => {
+      local.forEach((marker) => marker.setMap(null));
+      markersRef.current = new Map();
+    };
+  }, [positions]);
+
+  useEffect(() => {
+    positions.forEach((item) => {
+      const marker = markersRef.current.get(item.tripId);
+      if (marker) animateMarker(marker, item.position);
+    });
+  }, [positions]);
+
+  const fallback = (
+    <MapFallback>
+      <ul className="space-y-2 text-sm">
+        {positions.map((item) => (
+          <li key={item.tripId} className="rounded-xl border border-zinc-200 p-3">
+            <strong>{item.tripCode || item.tripId}</strong>
+            <span className="ml-2 text-zinc-500">{item.position.lat.toFixed(4)}, {item.position.lng.toFixed(4)}</span>
+          </li>
+        ))}
+      </ul>
+    </MapFallback>
+  );
+
+  return (
+    <MapView
+      className={className}
+      center={positions[0]?.position || defaultCenter}
+      onReady={handleReady}
+      fallback={fallback}
+    />
+  );
+}

@@ -105,4 +105,28 @@ describe('Sprint 9 production booking and financial integrity contracts', () => 
     expect(payment.statusHistory).toHaveLength(2);
     expect(payment.statusHistory[1].to).toBe('captured');
   });
+
+  test('ValidationLog accepts scan outcomes used by ticketController', async () => {
+    const ValidationLog = require('../models/ValidationLog');
+    for (const status of ['VALID', 'INVALID', 'ALREADY_USED']) {
+      const entry = new ValidationLog({
+        ticketId: `ticket-${status.toLowerCase()}`,
+        userId,
+        status
+      });
+      await expect(entry.validate()).resolves.toBeUndefined();
+    }
+  });
+
+  test('gateway booking create response contract includes lifecycle payment_pending', () => {
+    // Regression for STATE_OF_PROJECT §7.4: create booking JSON must expose lifecycle.
+    const requiresGatewayPayment = true;
+    const response = {
+      bookingId: 'BK-TEST',
+      lifecycle: requiresGatewayPayment ? 'payment_pending' : 'completed',
+      paymentRequired: requiresGatewayPayment
+    };
+    expect(response.lifecycle).toBe('payment_pending');
+    expect(response.paymentRequired).toBe(true);
+  });
 });

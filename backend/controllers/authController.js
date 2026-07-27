@@ -262,7 +262,18 @@ exports.validateInvite = async (req, res) => {
   if (!invite.organizationId || invite.organizationId.status !== 'active') {
     return res.status(400).json({ valid: false, error: 'Organization is not active' });
   }
-  res.json({ valid: true, invite });
+  res.json({
+    valid: true,
+    invite: {
+      email: invite.email,
+      role: invite.role,
+      expiresAt: invite.expiresAt,
+      organization: {
+        name: invite.organizationId?.name || null,
+        status: invite.organizationId?.status || null
+      }
+    }
+  });
 };
 
 exports.acceptInviteForNewUser = async (req, res) => {

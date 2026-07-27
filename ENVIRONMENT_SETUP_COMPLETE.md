@@ -61,8 +61,8 @@ NEXT_PUBLIC_API_URL=http://localhost:5001/api
 NEXT_PUBLIC_FARE=10
 
 # Clerk Authentication Keys
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_Z3Jvd2luZy1oeWVuYS0xNS5jbGVyay5hY2NvdW50cy5kZXYk
-CLERK_SECRET_KEY=sk_test_HZfzOVTdGz36fwJFIb748AcoJF2WuWXlPfd4JknE7w
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_YOUR_PUBLISHABLE_KEY
+CLERK_SECRET_KEY=sk_test_REDACTED_ROTATE_IMMEDIATELY
 
 # Clerk URL Configuration
 NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
@@ -95,7 +95,7 @@ $ grep -E "\.env" frontend/.gitignore
 - All other `.env*` files
 
 **Security Impact**: 
-- Clerk secret key `sk_test_HZfzOVTdGz36fwJFIb748AcoJF2WuWXlPfd4JknE7w` will NOT be committed
+- Clerk secret key `sk_test_REDACTED_ROTATE_IMMEDIATELY` will NOT be committed
 - Real Clerk publishable key will NOT be committed
 - Only `.env.example` with placeholders is in git
 
@@ -109,7 +109,7 @@ $ grep -E "\.env" frontend/.gitignore
 
 ```
 # MongoDB Configuration
-MONGO_URI=mongodb+srv://anudeep:Anudeep%404091@busticket.mwvyuly.mongodb.net/busticket?retryWrites=true&w=majority
+MONGO_URI=mongodb+srv://USER:PASSWORD@cluster.example.mongodb.net/dbname
 
 # Server Configuration
 PORT=5001
@@ -118,7 +118,7 @@ PORT=5001
 FARE=10
 
 # Authentication
-CLERK_SECRET_KEY=sk_test_HZfzOVTdGz36fwJFIb748AcoJF2WuWXlPfd4JknE7w
+CLERK_SECRET_KEY=sk_test_REDACTED_ROTATE_IMMEDIATELY
 
 # Frontend URL (used for invite links in email)
 FRONTEND_URL=http://localhost:3000
@@ -130,7 +130,7 @@ FRONTEND_URL=http://localhost:3000
 
 ```
 # MongoDB Configuration
-MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/dbname?retryWrites=true&w=majority
+MONGO_URI=mongodb+srv://USER:PASSWORD@cluster.example.mongodb.net/dbname
 
 # Server Configuration
 PORT=5001
@@ -169,7 +169,7 @@ node_modules/     — packages (correct)
 
 ```javascript
 module.exports = {
-  MONGO_URI: process.env.MONGO_URI || "mongodb+srv://...",  ✅ Loaded from .env
+  MONGO_URI: process.env.MONGO_URI || "mongodb+srv://USER:PASSWORD@cluster.example.mongodb.net/dbname",  ✅ Loaded from .env
   PORT: process.env.PORT || 5001,                             ✅ Loaded from .env
   FARE: process.env.FARE || 20                                ✅ Loaded from .env
 };
@@ -228,7 +228,7 @@ console.log('CLERK_SECRET_KEY:', process.env.CLERK_SECRET_KEY?.substring(0, 20) 
 **Result:**
 ```
 === Backend Configuration Loaded ===
-MONGO_URI: mongodb+srv://anudeep:Anudeep%404091@busticket.mwv...
+MONGO_URI: mongodb+srv://USER:PASSWORD@cluster.example.mongodb.net/dbname
 PORT: 5001
 FARE: 10
 
@@ -250,8 +250,8 @@ $ cd frontend && cat .env | grep -E "NEXT_PUBLIC_|CLERK_"
 ```
 NEXT_PUBLIC_API_URL=http://localhost:5001/api
 NEXT_PUBLIC_FARE=10
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_Z3Jvd2luZy1oeWVuYS0xNS5jbGVyay5hY2NvdW50cy5kZXYk
-CLERK_SECRET_KEY=sk_test_HZfzOVTdGz36fwJFIb748AcoJF2WuWXlPfd4JknE7w
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_YOUR_PUBLISHABLE_KEY
+CLERK_SECRET_KEY=sk_test_REDACTED_ROTATE_IMMEDIATELY
 NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
 NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
 NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/
@@ -313,7 +313,7 @@ components/RouteMapPicker.tsx (line 36):
 ### Backend (Server-side only - not exposed to browser)
 | Variable | Value | Source | Phase |
 |----------|-------|--------|-------|
-| MONGO_URI | mongodb+srv://... | .env | Phase 0 |
+| MONGO_URI | mongodb+srv://USER:PASSWORD@cluster.example.mongodb.net/dbname | .env | Phase 0 |
 | PORT | 5001 | .env | Phase 0 |
 | FARE | 10 | .env | Phase 0 |
 | CLERK_SECRET_KEY | sk_test_HZfz... | .env | Phase 0 (Clerk) |
@@ -393,7 +393,7 @@ npm run dev
 
 1. **Set environment variables on server:**
    ```bash
-   export MONGO_URI="mongodb+srv://..."
+   export MONGO_URI="mongodb+srv://USER:PASSWORD@cluster.example.mongodb.net/dbname"
    export PORT=5001
    export FARE=10
    export CLERK_SECRET_KEY="sk_test_..."
@@ -427,7 +427,7 @@ Both backend and frontend Dockerfiles would automatically:
 **Cause**: DNS cannot reach MongoDB Atlas (expected in isolated environments)  
 **Fix**: 
 - Verify MONGO_URI is correct in .env
-- Ensure server has network access to mongodb+srv://busticket.mwvyuly.mongodb.net
+- Ensure server has network access to mongodb+srv://USER:PASSWORD@cluster.example.mongodb.net/dbname
 - Check firewall allows outbound to MongoDB Atlas ports (443, 27017)
 
 ### Frontend Missing Environment Variables

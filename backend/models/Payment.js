@@ -20,6 +20,18 @@ const paymentSchema = new mongoose.Schema(
     }],
     provider: { type: String, enum: ['razorpay'], default: 'razorpay' },
     providerMode: { type: String, enum: ['test', 'live'], default: 'test' },
+    /**
+     * Route settlement mode for this payment going forward.
+     * platform_fallback = no org linked account; funds stay on platform Razorpay account.
+     * Past payments are intentionally not remapped.
+     */
+    routeSettlement: {
+      type: String,
+      enum: ['platform_fallback', 'linked_account'],
+      default: 'platform_fallback',
+      index: true
+    },
+    razorpayLinkedAccountId: { type: String, default: null, trim: true, index: true },
     receipt: { type: String, default: null, index: true },
     paymentMethod: { type: String, enum: ['wallet', 'gateway', 'wallet_gateway'], default: 'gateway' },
     walletAmount: { type: Number, default: 0, min: 0 },

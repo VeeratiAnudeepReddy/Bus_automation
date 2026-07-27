@@ -67,6 +67,7 @@ exports.createOrder = async (req, res, next) => {
         organizationId,
         expiry: result.payment.expiresAt
       },
+      routeSettlement: result.routeSettlement || result.payment.routeSettlement || 'platform_fallback',
       keyId: process.env.RAZORPAY_KEY_ID || null
     });
   } catch (error) {
@@ -119,20 +120,28 @@ exports.webhook = async (req, res, next) => {
   }
 };
 
-exports.listPayments = async (req, res) => {
-  const organizationId = await resolveOrganizationId(req.user);
-  const query = { organizationId };
-  if (req.user.role === 'customer' || req.user.role === 'user') query.userId = req.user._id;
-  const payments = await Payment.find(query).sort({ createdAt: -1 }).limit(200).lean();
-  res.json({ payments });
+exports.listPayments = async (req, res, next) => {
+  try {
+    const organizationId = await resolveOrganizationId(req.user);
+    const query = { organizationId };
+    if (req.user.role === 'customer' || req.user.role === 'user') query.userId = req.user._id;
+    const payments = await Payment.find(query).sort({ createdAt: -1 }).limit(200).lean();
+    res.json({ payments });
+  } catch (error) {
+    next(error);
+  }
 };
 
-exports.getPayment = async (req, res) => {
-  const organizationId = await resolveOrganizationId(req.user);
-  const payment = await Payment.findOne({ _id: req.params.id, organizationId }).lean();
-  if (!payment) return res.status(404).json({ error: 'Payment not found' });
-  const webhooks = await PaymentWebhook.find({ organizationId, 'payload.payload.payment.entity.order_id': payment.razorpayOrderId }).sort({ createdAt: -1 }).limit(20).lean();
-  res.json({ payment, webhooks });
+exports.getPayment = async (req, res, next) => {
+  try {
+    const organizationId = await resolveOrganizationId(req.user);
+    const payment = await Payment.findOne({ _id: req.params.id, organizationId }).lean();
+    if (!payment) return res.status(404).json({ error: 'Payment not found' });
+    const webhooks = await PaymentWebhook.find({ organizationId, 'payload.payload.payment.entity.order_id': payment.razorpayOrderId }).sort({ createdAt: -1 }).limit(20).lean();
+    res.json({ payment, webhooks });
+  } catch (error) {
+    next(error);
+  }
 };
 
 exports.refund = async (req, res, next) => {

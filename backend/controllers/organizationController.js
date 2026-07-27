@@ -106,6 +106,12 @@ function serializeOrganization(organization) {
     branding: organization.branding,
     settings: organization.settings,
     subscription: organization.subscription,
+    razorpayRoute: organization.razorpayRoute || {
+      linkedAccountId: null,
+      status: 'none',
+      onboardedAt: null,
+      notes: null
+    },
     createdAt: organization.createdAt,
     updatedAt: organization.updatedAt
   };
@@ -138,6 +144,28 @@ function buildOrganizationUpdate(body) {
       });
     }
   });
+
+  // Razorpay Route linked-account binding (org_owner / managers).
+  if (body.razorpayRoute && typeof body.razorpayRoute === 'object') {
+    const route = body.razorpayRoute;
+    if (Object.prototype.hasOwnProperty.call(route, 'linkedAccountId')) {
+      update['razorpayRoute.linkedAccountId'] = cleanString(route.linkedAccountId);
+    }
+    if (Object.prototype.hasOwnProperty.call(route, 'status')) {
+      const status = cleanString(route.status);
+      if (status && ['none', 'pending', 'active', 'suspended'].includes(status)) {
+        update['razorpayRoute.status'] = status;
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(route, 'notes')) {
+      update['razorpayRoute.notes'] = cleanString(route.notes);
+    }
+    if (update['razorpayRoute.status'] === 'active' || route.onboardedAt) {
+      update['razorpayRoute.onboardedAt'] = route.onboardedAt
+        ? new Date(route.onboardedAt)
+        : new Date();
+    }
+  }
 
   return update;
 }

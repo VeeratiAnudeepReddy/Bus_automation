@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-07-27
+
+### Launch-blocker follow-up (maps = Option A)
+- Wired Razorpay Hosted Checkout into booking + wallet; verified order→verify→webhook→ACTIVE tickets loop.
+- Added Clerk Svix webhook endpoint; hardened Razorpay webhook duplicate handling; Ethereal email delivery proven.
+- Passenger track page uses authenticated SSE + interpolated multi-vehicle markers.
+- Credential rotation remains explicitly open / deferred.
+
+### Production hardening sweep
+- Scrubbed committed Clerk/Mongo secrets from tracked markdown; added CI secret-scan.
+- Hardened production config (Razorpay webhook secret required), JWKS timeout, CORS, health redaction, metrics gate.
+- Booking create returns `lifecycle`; driver GPS uses device geolocation; dispatcher loading/empty/error polish.
+- Expanded CI (typecheck + secret scan) and added manual/tag deploy workflow with health check hook.
+- Wrote `PRODUCTION_READINESS_REPORT.md` and refreshed production checklist.
+
+### Follow-up (resolved decisions)
+- Migration `005_promote_anudeep_org_owner.js`: `anudeepreddy016@…` `admin` → `org_owner` on Default Organization (not super_admin); AuditLog recorded.
+- Razorpay Route: per-org linked accounts with platform fallback + structured `razorpay_route_platform_fallback` logs; docs updated; no historical payment remapping.
+- E2E: real Clerk session JWT → auth → routes → gateway booking/order (fallback) → signature reject without checkout → wallet booking confirmation. Tests 59 passed.
+
+### Fixed (audit ground-truth pass)
+- Added `migrations/004_repair_user_tenancy.js` to backfill missing `organizationId`, fix null roles, and translate legacy `user` → `customer` (leaves legacy `admin` for human review).
+- `resolveOrganizationId` now persists a default-org heal onto the user record when org binding is missing.
+- Background jobs: `ticket_expiration` and `cleanup` now auto-schedule on boot; stub jobs are marked `implemented: false`.
+- Pending payments without `expiresAt` older than 15 minutes are expired by cleanup (fixes stuck `created` rows).
+- `/health` payments.ok now reflects whether Razorpay keys are configured; scheduler reports stub vs scheduled jobs.
+- Ticket scan again writes `ValidationLog` (`VALID` / `INVALID` / `ALREADY_USED`).
+- Replaced stale `QUICKSTART.md` MVP curl flow (`/api/register`) with current Clerk-auth quick start.
+- Gitignored stray `files.zip` / `image.png` duplicates.
+
+### Evidence
+- Backend `npm test`: 9 suites (extended coverage for job registry + ValidationLog).
+- Runtime: `/health`, `/ready`, auth 401 without bearer confirmed against live Mongo Atlas.
+
 ## 2026-07-03
 
 ### Sprint 9 Added

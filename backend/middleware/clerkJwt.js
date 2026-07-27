@@ -50,7 +50,20 @@ async function fetchJwks(issuer) {
     return cached.keys;
   }
 
-  const response = await fetch(jwksUrl);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  let response;
+  try {
+    response = await fetch(jwksUrl, { signal: controller.signal });
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error('Clerk JWKS fetch timed out');
+    }
+    throw new Error(`Unable to fetch Clerk JWKS: ${error.message}`);
+  } finally {
+    clearTimeout(timeout);
+  }
+
   if (!response.ok) {
     throw new Error(`Unable to fetch Clerk JWKS: ${response.status}`);
   }

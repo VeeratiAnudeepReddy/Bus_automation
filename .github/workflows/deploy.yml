@@ -1,0 +1,47 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Backend install + test gate
+        run: |
+          cd backend
+          npm ci
+          npm test
+        env:
+          NODE_ENV: test
+
+      - name: Build Docker images
+        run: docker compose -f docker-compose.prod.yml build
+
+      - name: Deploy placeholder
+        run: |
+          echo "Wire this step to your host (SSH/kubectl/compose up)."
+          echo "Required GitHub secrets: DEPLOY_HOST, DEPLOY_SSH_KEY, PRODUCTION_HEALTH_URL"
+          echo "Do not echo secret values."
+
+      - name: Post-deploy health check
+        env:
+          PRODUCTION_HEALTH_URL: ${{ secrets.PRODUCTION_HEALTH_URL }}
+        run: |
+          if [ -z "$PRODUCTION_HEALTH_URL" ]; then
+            echo "PRODUCTION_HEALTH_URL secret not set — skipping live health check (configure before production cutover)."
+            exit 0
+          fi
+          curl -fsS "$PRODUCTION_HEALTH_URL/live" | tee /tmp/live.json
+          curl -fsS -o /tmp/ready.json -w "%{http_code}" "$PRODUCTION_HEALTH_URL/ready" | tee /tmp/ready.code
+          code=$(cat /tmp/ready.code)
+          test "$code" = "200"

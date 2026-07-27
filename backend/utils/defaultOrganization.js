@@ -25,6 +25,17 @@ async function resolveOrganizationId(user) {
   }
 
   const organization = await getDefaultOrganization();
+
+  // Persist heal so subsequent requests and requireOrgScope see a real org binding.
+  if (user?._id) {
+    const User = require('../models/User');
+    await User.updateOne(
+      { _id: user._id, $or: [{ organizationId: null }, { organizationId: { $exists: false } }] },
+      { $set: { organizationId: organization._id } }
+    );
+    user.organizationId = organization._id;
+  }
+
   return organization._id;
 }
 

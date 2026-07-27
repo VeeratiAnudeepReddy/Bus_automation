@@ -25,12 +25,15 @@
     "dotenv": "^17.4.1",
     "express": "^4.18.2",
     "mongodb": "^7.4.0",
-    "mongoose": "^7.5.0",
+    "mongoose": "^7.8.10",
+    "nodemailer": "^6.10.1",
     "qrcode": "^1.5.3",
     "razorpay": "^2.9.6",
+    "svix": "^1.42.0",
     "uuid": "^9.0.0"
   },
   "devDependencies": {
+    "@types/nodemailer": "^8.0.1",
     "jest": "^30.4.2",
     "mongodb-memory-server": "^11.2.0",
     "nodemon": "^3.0.1"

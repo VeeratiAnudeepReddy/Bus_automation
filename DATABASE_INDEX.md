@@ -67,7 +67,7 @@
 | Post | `backend/models/Post.js` | Implemented for announcements, comments, likes, visibility, pinning, attachments, read receipts, and history |
 | SupportTicket | `backend/models/SupportTicket.js` | Implemented for helpdesk tickets, replies, assignments, escalation, SLA, and history |
 | AuditLog | `backend/models/AuditLog.js` | Implemented; includes organization and user management actions |
-| ValidationLog | `backend/models/ValidationLog.js` | Model only, not used by live routes |
+| ValidationLog | `backend/models/ValidationLog.js` | Written by `ticketController.scanTicket` (`VALID` / `INVALID` / `ALREADY_USED`) as of 2026-07-27 |
 
 ## Missing Collections
 - VehicleHealth and performance analytics collections are not standalone yet; Sprint 7 uses Trip, GPSLocation, FuelRecord, MaintenanceRecord, DriverProfile, and ConductorProfile data.

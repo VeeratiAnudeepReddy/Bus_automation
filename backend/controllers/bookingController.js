@@ -170,7 +170,14 @@ exports.createBooking = async (req, res) => {
       }
     });
 
-    res.status(201).json({ bookingId, pricing, balance: walletTxn?.balanceAfter ?? null, paymentRequired: requiresGatewayPayment, tickets: await Promise.all(tickets.map(publicTicket)) });
+    res.status(201).json({
+      bookingId,
+      lifecycle: requiresGatewayPayment ? 'payment_pending' : 'completed',
+      pricing,
+      balance: walletTxn?.balanceAfter ?? null,
+      paymentRequired: requiresGatewayPayment,
+      tickets: await Promise.all(tickets.map(publicTicket))
+    });
   } catch (error) {
     if (error.message === 'INSUFFICIENT_BALANCE') return res.status(400).json({ error: 'Insufficient balance' });
     if (error.code === 11000) return res.status(409).json({ error: 'One or more selected seats are temporarily locked or already booked' });

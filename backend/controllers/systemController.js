@@ -1,9 +1,14 @@
-const fs = require('fs');
 const mongoose = require('mongoose');
 const config = require('../config');
 const metrics = require('../services/metricsService');
 const jobService = require('../services/jobService');
 const backupService = require('../services/backupService');
+
+function boolEnv(name, fallback = false) {
+  const value = process.env[name];
+  if (value == null || value === '') return fallback;
+  return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
+}
 
 function mongoStatus() {
   return {
@@ -13,29 +18,63 @@ function mongoStatus() {
   };
 }
 
-function healthPayload() {
+function paymentsHealth() {
+  const configured = Boolean(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET);
   return {
-    status: mongoStatus().ok ? 'ok' : 'degraded',
-    environment: config.NODE_ENV,
-    uptimeSeconds: process.uptime(),
-    mongo: mongoStatus(),
-    redis: { ok: false, mode: 'placeholder' },
-    scheduler: { ok: true, jobs: jobService.listJobs().length },
-    payments: { ok: true, provider: config.providers.payments },
-    email: { ok: config.FEATURE_FLAGS.email, provider: config.providers.email },
-    maps: { ok: true, provider: config.providers.maps },
-    memory: process.memoryUsage(),
-    disk: { ok: true, cwd: process.cwd() }
+    ok: configured,
+    configured,
+    provider: config.providers.payments,
+    mode: process.env.RAZORPAY_MODE || 'test',
+    webhookSecretConfigured: Boolean(process.env.RAZORPAY_WEBHOOK_SECRET),
+    note: configured
+      ? 'Keys present; live checkout/webhook settlement still requires runtime verification'
+      : 'RAZORPAY_KEY_ID/SECRET missing'
   };
 }
 
-exports.health = (req, res) => res.json(healthPayload());
+function healthPayload({ publicView = false } = {}) {
+  const jobs = jobService.listJobs();
+  const payments = paymentsHealth();
+  const payload = {
+    status: mongoStatus().ok ? 'ok' : 'degraded',
+    environment: config.NODE_ENV,
+    uptimeSeconds: process.uptime(),
+    mongo: {
+      ok: mongoStatus().ok,
+      ...(publicView ? {} : { state: mongoStatus().state, name: mongoStatus().name })
+    },
+    redis: { ok: false, mode: 'placeholder' },
+    scheduler: {
+      ok: true,
+      jobs: jobs.length,
+      implementedJobs: jobs.filter((job) => job.implemented).length,
+      scheduledJobs: jobs.filter((job) => job.scheduled).length,
+      ...(publicView ? {} : { stubJobs: jobs.filter((job) => !job.implemented).map((job) => job.name) })
+    },
+    payments: publicView
+      ? { ok: payments.ok, provider: payments.provider }
+      : payments,
+    email: { ok: config.FEATURE_FLAGS.email, provider: publicView ? undefined : config.providers.email },
+    maps: { ok: true, provider: publicView ? undefined : config.providers.maps },
+    memory: publicView ? undefined : process.memoryUsage(),
+    disk: publicView ? undefined : { ok: true, cwd: process.cwd() }
+  };
+  return payload;
+}
+
+exports.health = (req, res) => res.json(healthPayload({ publicView: config.NODE_ENV === 'production' }));
 exports.live = (req, res) => res.json({ status: 'alive', uptimeSeconds: process.uptime() });
 exports.ready = (req, res) => {
-  const payload = healthPayload();
+  const payload = healthPayload({ publicView: config.NODE_ENV === 'production' });
   res.status(payload.mongo.ok ? 200 : 503).json(payload);
 };
 exports.metrics = (req, res) => {
+  if (config.NODE_ENV === 'production' && !req.user) {
+    // Allow metrics scrape only when METRICS_PUBLIC=true; otherwise require prior auth middleware.
+    if (!boolEnv('METRICS_PUBLIC', false)) {
+      return res.status(401).json({ error: 'Metrics require authentication or METRICS_PUBLIC=true' });
+    }
+  }
   res.setHeader('Content-Type', 'text/plain; version=0.0.4');
   res.send(metrics.prometheus());
 };

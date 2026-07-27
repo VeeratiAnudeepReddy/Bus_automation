@@ -1,16 +1,17 @@
 # Map Integration
 
-## Implemented
-Restored modules include Google Maps embed cards where location context applies:
-- Finance collection geography.
-- Payments location context.
-- Pricing fare zone and route heatmap context.
-- Fleet GPS and depot map.
-- Super-admin platform coverage map.
-- Customer booking/dashboard/detail maps from the prior restoration pass.
+## Decision (2026-07-27)
+**Option A:** custom SSE + Google Maps JavaScript API.  
+Not Fleet Engine (cost/setup not justified for internal org fleet).
 
-## Pattern
-`MapCard` in `frontend/components/RestoredEnterpriseModules.tsx`.
+## Frontend
+- `frontend/components/maps/MapView.tsx` — Maps JS loader from `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`, marker interpolation, `TripTrackerMap`, `MultiVehicleMap`
+- `frontend/app/track/[tripId]/page.tsx` — SSE subscription + poll fallback
+- `frontend/lib/realtime.ts` — authenticated SSE client
 
-## Future Upgrade
-If a Google Maps API key is present and the app adds a Maps SDK dependency, the embed card can be upgraded to route polylines, live markers, stop layers, and ETA overlays.
+## Backend
+- GPS ingest: `POST /api/trips/:id/location`
+- Broadcast: `backend/services/realtimeBus.js` → `GET /api/realtime/events`
+
+## Security
+API keys only from env; restrict Maps key by HTTP referrer in GCP.

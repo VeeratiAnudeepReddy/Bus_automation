@@ -12,13 +12,48 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
       - name: Backend install
         run: cd backend && npm ci
+
       - name: Backend tests
         run: cd backend && npm test
+        env:
+          NODE_ENV: test
+
       - name: Frontend install
         run: cd frontend && npm ci
+
       - name: Frontend lint
         run: cd frontend && npm run lint
+
+      - name: Frontend typecheck
+        run: cd frontend && npx tsc --noEmit
+
       - name: Frontend build
         run: cd frontend && npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:5001/api
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_placeholder
+          CLERK_SECRET_KEY: sk_test_placeholder
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fail if live secrets appear in tracked files
+        run: |
+          set -e
+          if git grep -nE 'sk_(live|test)_[A-Za-z0-9]{20,}' -- '*.md' '*.js' '*.ts' '*.tsx' '*.json' ':!backend/.env.example' ':!frontend/.env.example' | grep -v REDACTED | grep -v YOUR_ | grep -v placeholder; then
+            echo "Possible committed Clerk secret detected"
+            exit 1
+          fi
+          if git grep -nE 'mongodb\+srv://[^U][^:]+:[^@]+@' -- '*.md' '*.js' '*.ts' '*.tsx' | grep -v 'USER:PASSWORD' | grep -v example.mongodb.net; then
+            echo "Possible committed Mongo URI with credentials detected"
+            exit 1
+          fi
+          echo "Secret scan clean"

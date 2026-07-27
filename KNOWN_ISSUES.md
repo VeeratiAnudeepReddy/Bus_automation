@@ -1,10 +1,21 @@
 # Known Issues
 
+## Fixed in 2026-07-27 audit pass (see CHANGELOG / STATE_OF_PROJECT_2026-07-27.md)
+- Missing `organizationId` / null `role` / legacy `user` role on live users → run `node migrations/004_repair_user_tenancy.js`.
+- `anudeepreddy016@…` legacy `admin` → `org_owner` on Default Organization → `node migrations/005_promote_anudeep_org_owner.js`.
+- Background expiry jobs only ran when manually triggered → `ticket_expiration` / `cleanup` now interval-scheduled on boot.
+- Payments stuck in `created` with null `expiresAt` never cleaned → expiry query now includes age fallback.
+- `/health` always reported `payments.ok: true` → now keyed off Razorpay env configuration.
+- `ValidationLog` model unused → scan path writes VALID/INVALID/ALREADY_USED again.
+- `QUICKSTART.md` documented dead `/api/register` flow → rewritten for Clerk bearer auth.
+- Razorpay now supports Route linked accounts per org with platform fallback (orgs without `razorpayRoute` still pay via platform account; see payment logs).
+
 ## Sprint 9 Remaining Production Gaps
 - Live Razorpay settlement reconciliation still needs production credentials and a real settlement export/API check.
 - Invoice and receipt endpoints return printable HTML; binary PDF generation is not yet implemented.
 - Chargeback and dispute statuses are tracked, but evidence submission and dispute operations workflow are not yet implemented.
 - Finance dashboard includes ledger totals, but accounting-period close/lock workflows are not yet implemented.
+- Several registered jobs remain stubs (`wallet_reconciliation`, `payment_verification`, `notification_retry`, etc.).
 
 ## Sprint 8 Remaining Production Gaps
 - Live Razorpay credentials and webhook URLs still require production validation.
@@ -15,15 +26,14 @@
 - Monitoring endpoint exists; Prometheus/Grafana deployment is pending.
 
 ## Authentication Runtime Verification Pending
-- Backend Clerk JWT verification has been implemented, but the module still needs end-to-end verification with a live backend process and a real Clerk session token.
+- Backend Clerk JWT verification is implemented and rejects missing/invalid bearer tokens at runtime.
+- End-to-end verification with a **real Clerk session JWT** (browser login → `/api/auth/sync` → booking) is still pending in this environment.
 - Sandbox `npm start` can fail with `listen EPERM 0.0.0.0:5001`.
-- Unsandboxed backend start reports `EADDRINUSE :::5001` because an existing `MainThread` process is already listening on port 5001.
-- The live port 5001 process returns HTTP 200 for `/` and HTTP 401 `Missing bearer token` for `/api/tickets/my` without auth, so the active process appears to be running the new bearer-token middleware.
 
 ## RBAC Is Incomplete
-- Old and new role values still coexist.
-- Frontend routing now centralizes role route access and dashboard redirects, but backend endpoint-level permission coverage still needs more integration tests.
-- Enterprise permission management and role assignment UI are missing.
+- Legacy `admin` role may still exist in DB; migration 004 intentionally does **not** auto-map `admin` → `conductor` (may be an org operator — human decision required).
+- Frontend routing centralizes role route access; backend endpoint-level permission coverage still needs more integration tests.
+- Enterprise permission management and role assignment UI are missing (`Permission` / `RolePermission` models not implemented).
 
 ## Onboarding Remaining Gaps
 - First-run setup, explicit customer creation, invite-only employee onboarding, and organization-owner creation are implemented.
@@ -84,3 +94,5 @@
 ## Production Secrets And Domains
 - Development Clerk keys and localhost configuration are acceptable only for development.
 - Production Clerk keys, allowed domains, webhook secrets, payment secrets, and deployment secrets must be configured before launch.
+- **Action required:** rotate Clerk secret and MongoDB password that previously appeared in tracked markdown (now scrubbed in tree; git history may still contain them).
+- See `PRODUCTION_READINESS_REPORT.md` for launch blockers vs post-launch debt.

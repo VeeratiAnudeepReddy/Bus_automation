@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { AlertTriangle, Bus, CalendarClock, UserCheck, type LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
+import EmptyState from '@/components/EmptyState';
+import ErrorState from '@/components/ErrorState';
 import PageShell from '@/components/PageShell';
 import { apiService, DispatcherDashboard } from '@/lib/api';
 import { useAppRole } from '@/lib/useAppRole';
@@ -11,25 +13,36 @@ import { useAppRole } from '@/lib/useAppRole';
 export default function DispatcherDashboardPage() {
   const { isLoaded, ready, getToken } = useAppRole();
   const [data, setData] = useState<DispatcherDashboard | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = async () => {
     const token = await getToken();
     if (!token) return;
-    setData(await apiService.getDispatcherDashboard(token));
+    setLoading(true);
+    setLoadError(null);
+    try {
+      setData(await apiService.getDispatcherDashboard(token));
+    } catch {
+      setLoadError('Failed to load dispatcher console');
+      toast.error('Failed to load dispatcher console');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    if (isLoaded && ready) void load().catch(() => toast.error('Failed to load dispatcher console'));
+    if (isLoaded && ready) void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded, ready]);
 
-  const stats: [string, number, LucideIcon][] = [
-    ['Running', data?.stats.runningTrips ?? 0, CalendarClock],
-    ['Upcoming', data?.stats.upcomingDepartures ?? 0, CalendarClock],
-    ['Active buses', data?.stats.activeBuses ?? 0, Bus],
-    ['Drivers ready', data?.stats.driverAvailability ?? 0, UserCheck],
-    ['Conductors ready', data?.stats.conductorAvailability ?? 0, UserCheck],
-    ['Incidents', data?.stats.incidents ?? 0, AlertTriangle]
+  const stats: [string, number | string, LucideIcon][] = [
+    ['Running', loading ? '—' : (data?.stats.runningTrips ?? 0), CalendarClock],
+    ['Upcoming', loading ? '—' : (data?.stats.upcomingDepartures ?? 0), CalendarClock],
+    ['Active buses', loading ? '—' : (data?.stats.activeBuses ?? 0), Bus],
+    ['Drivers ready', loading ? '—' : (data?.stats.driverAvailability ?? 0), UserCheck],
+    ['Conductors ready', loading ? '—' : (data?.stats.conductorAvailability ?? 0), UserCheck],
+    ['Incidents', loading ? '—' : (data?.stats.incidents ?? 0), AlertTriangle]
   ];
 
   return (
@@ -39,6 +52,8 @@ export default function DispatcherDashboardPage() {
         <h1 className="mt-1 text-base font-semibold text-zinc-950">Dispatcher Control Center</h1>
         <p className="mt-1 text-sm text-zinc-600">Live trip control, vehicle assignment visibility, delay handling, leave queue, and incidents.</p>
       </section>
+
+      {loadError ? <ErrorState title={loadError} onRetry={() => void load()} /> : null}
 
       <section className="grid grid-cols-2 gap-2 lg:grid-cols-3">
         {stats.map(([label, value, Icon]) => (
@@ -80,7 +95,7 @@ export default function DispatcherDashboardPage() {
                 </div>
                 <p className="mt-1 text-zinc-600">{trip.plannedDeparture} - {trip.plannedArrival} · Delay {trip.delayMinutes} min</p>
               </div>
-            )) : <p className="rounded-xl border border-dashed border-zinc-200 p-4 text-sm text-zinc-500">No trips created for today. Create one from a schedule.</p>}
+            )) : (!loading ? <EmptyState title="No trips today" description="Create a trip from an active schedule to populate this board." actionHref="/trips" actionLabel="Manage trips" /> : <p className="text-sm text-zinc-500">Loading trips…</p>)}
           </div>
         </div>
 
@@ -92,7 +107,7 @@ export default function DispatcherDashboardPage() {
                 <div className="font-medium">{incident.title}</div>
                 <p>{incident.severity} · {incident.status}</p>
               </div>
-            )) : <p className="rounded-xl border border-dashed border-zinc-200 p-4 text-sm text-zinc-500">No active incidents.</p>}
+            )) : (!loading ? <EmptyState title="No open incidents" description="Incident reports from drivers and conductors will appear here." actionHref="/incidents" actionLabel="Open incidents" /> : <p className="text-sm text-zinc-500">Loading incidents…</p>)}
           </div>
         </div>
       </section>

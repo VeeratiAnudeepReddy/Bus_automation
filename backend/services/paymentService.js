@@ -9,6 +9,8 @@ const Invoice = require('../models/Invoice');
 const Receipt = require('../models/Receipt');
 const BookingHistory = require('../models/BookingHistory');
 const Notification = require('../models/Notification');
+const Organization = require('../models/Organization');
+const logger = require('../utils/logger');
 const { recordWalletTransaction } = require('./walletService');
 const { transitionBooking } = require('./bookingIntegrityService');
 const { recordFinancialEntry } = require('./financialLedgerService');
@@ -51,9 +53,20 @@ class RazorpayProvider extends PaymentProvider {
     this.client = this.keyId && this.keySecret ? new Razorpay({ key_id: this.keyId, key_secret: this.keySecret }) : null;
   }
 
-  async createOrder({ amount, currency = 'INR', receipt, notes }) {
+  async createOrder({ amount, currency = 'INR', receipt, notes, transfers = null }) {
     if (!this.client) throw new Error('RAZORPAY_NOT_CONFIGURED');
-    return this.client.orders.create({ amount, currency, receipt, notes, payment_capture: 1 });
+    const payload = {
+      amount,
+      currency,
+      receipt,
+      notes,
+      payment_capture: 1,
+      partial_payment: false
+    };
+    if (Array.isArray(transfers) && transfers.length > 0) {
+      payload.transfers = transfers;
+    }
+    return this.client.orders.create(payload);
   }
 
   verifyPayment(payload) {
@@ -97,17 +110,106 @@ function createReceiptId(prefix) {
   return `${prefix}-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
 }
 
+/**
+ * Resolve Razorpay Route settlement for an organization.
+ * Active linkedAccountId → transfer on order create.
+ * Otherwise → platform account fallback (never block payment) + structured log.
+ */
+async function resolveRouteSettlement(organizationId) {
+  const organization = await Organization.findById(organizationId)
+    .select('name slug razorpayRoute')
+    .lean();
+
+  const linkedAccountId = organization?.razorpayRoute?.linkedAccountId || null;
+  const routeStatus = organization?.razorpayRoute?.status || 'none';
+  const canRoute = Boolean(linkedAccountId && routeStatus === 'active');
+
+  if (canRoute) {
+    return {
+      routeSettlement: 'linked_account',
+      linkedAccountId,
+      organizationSlug: organization?.slug || null
+    };
+  }
+
+  logger.payment('razorpay_route_platform_fallback', {
+    organizationId: String(organizationId),
+    organizationSlug: organization?.slug || null,
+    organizationName: organization?.name || null,
+    routeStatus,
+    linkedAccountId: linkedAccountId || null,
+    reason: linkedAccountId
+      ? `linked account status is "${routeStatus}" (need active)`
+      : 'organization has no Razorpay Route linkedAccountId'
+  });
+
+  return {
+    routeSettlement: 'platform_fallback',
+    linkedAccountId: null,
+    organizationSlug: organization?.slug || null
+  };
+}
+
+function buildRouteTransfers({ linkedAccountId, amountPaise, currency, organizationId, bookingId }) {
+  return [
+    {
+      account: linkedAccountId,
+      amount: amountPaise,
+      currency,
+      notes: {
+        organizationId: String(organizationId),
+        bookingId: bookingId || null
+      },
+      linked_account_notes: ['organizationId'],
+      on_hold: false
+    }
+  ];
+}
+
 async function createOrderForPayment({ organizationId, user, bookingId, amount, coupon, walletAmount = 0, paymentMethod = 'gateway', currency = 'INR', metadata = {}, idempotencyKey }) {
   const gatewayAmount = Math.max(0, Number(amount) - Number(walletAmount || 0));
   const existing = idempotencyKey ? await Payment.findOne({ organizationId, idempotencyKey }) : null;
-  if (existing) return { payment: existing, order: { id: existing.razorpayOrderId, amount: existing.gatewayAmount * 100, currency: existing.currency, receipt: existing.receipt } };
+  if (existing) {
+    return {
+      payment: existing,
+      order: {
+        id: existing.razorpayOrderId,
+        amount: existing.gatewayAmount * 100,
+        currency: existing.currency,
+        receipt: existing.receipt
+      },
+      routeSettlement: existing.routeSettlement || 'platform_fallback'
+    };
+  }
 
   const walletOnly = gatewayAmount === 0 || paymentMethod === 'wallet';
   const receipt = createReceiptId('RZP');
   const provider = getPaymentProvider();
+  const route = await resolveRouteSettlement(organizationId);
+  const amountPaise = Math.round(gatewayAmount * 100);
+  const transfers = !walletOnly && route.routeSettlement === 'linked_account'
+    ? buildRouteTransfers({
+      linkedAccountId: route.linkedAccountId,
+      amountPaise,
+      currency,
+      organizationId,
+      bookingId
+    })
+    : null;
+
   const order = walletOnly
     ? { id: `wallet_${crypto.randomBytes(12).toString('hex')}`, amount: 0, currency, receipt }
-    : await provider.createOrder({ amount: Math.round(gatewayAmount * 100), currency, receipt, notes: { bookingId, organizationId: String(organizationId) } });
+    : await provider.createOrder({
+      amount: amountPaise,
+      currency,
+      receipt,
+      notes: {
+        bookingId: bookingId || null,
+        organizationId: String(organizationId),
+        routeSettlement: route.routeSettlement
+      },
+      transfers
+    });
 
   const payment = await Payment.create({
     organizationId,
@@ -117,6 +219,8 @@ async function createOrderForPayment({ organizationId, user, bookingId, amount, 
     amount: Number(amount),
     currency,
     providerMode: provider.mode,
+    routeSettlement: route.routeSettlement,
+    razorpayLinkedAccountId: route.linkedAccountId,
     receipt,
     paymentMethod: walletOnly ? 'wallet' : (walletAmount > 0 ? 'wallet_gateway' : 'gateway'),
     walletAmount,
@@ -124,10 +228,24 @@ async function createOrderForPayment({ organizationId, user, bookingId, amount, 
     couponCode: coupon || null,
     expiresAt: new Date(Date.now() + 15 * 60 * 1000),
     idempotencyKey,
-    metadata
+    metadata: {
+      ...metadata,
+      routeSettlement: route.routeSettlement,
+      razorpayLinkedAccountId: route.linkedAccountId
+    }
   });
 
-  return { payment, order };
+  logger.payment('razorpay_order_created', {
+    paymentId: String(payment._id),
+    organizationId: String(organizationId),
+    bookingId: bookingId || null,
+    routeSettlement: route.routeSettlement,
+    linkedAccountId: route.linkedAccountId,
+    gatewayAmount,
+    orderId: order.id
+  });
+
+  return { payment, order, routeSettlement: route.routeSettlement };
 }
 
 async function finalizeVerifiedPayment({ payment, razorpayPaymentId, razorpaySignature, actorId }) {
@@ -238,6 +356,42 @@ async function finalizeVerifiedPayment({ payment, razorpayPaymentId, razorpaySig
     category: 'payment'
   });
 
+  try {
+    const User = require('../models/User');
+    const { queueEmail } = require('./providerServices');
+    const user = await User.findById(payment.userId).lean();
+    const recipient = user?.email || null;
+    if (recipient) {
+      if (payment.bookingId) {
+        await queueEmail({
+          recipient,
+          template: 'booking_confirmation',
+          payload: {
+            name: user?.name,
+            bookingId: payment.bookingId,
+            amount: payment.amount,
+            currency: payment.currency || 'INR',
+            razorpayPaymentId: payment.razorpayPaymentId
+          }
+        });
+      }
+      await queueEmail({
+        recipient,
+        template: 'receipt',
+        payload: {
+          name: user?.name,
+          bookingId: payment.bookingId,
+          amount: payment.amount,
+          currency: payment.currency || 'INR',
+          orderId: payment.razorpayOrderId,
+          razorpayPaymentId: payment.razorpayPaymentId
+        }
+      });
+    }
+  } catch (error) {
+    logger.error('payment_email_notify_failed', { paymentId: payment._id, error: error.message });
+  }
+
   return payment;
 }
 
@@ -258,12 +412,31 @@ async function failPayment(payment, reason) {
 
 async function processWebhook({ rawBody, signature, payload }) {
   const provider = getPaymentProvider();
+  if (process.env.NODE_ENV === 'production' && !process.env.RAZORPAY_WEBHOOK_SECRET) {
+    logger.security('razorpay_webhook_secret_missing', { event: payload?.event || null });
+    const error = new Error('RAZORPAY_WEBHOOK_SECRET is required in production');
+    error.statusCode = 503;
+    throw error;
+  }
   const verified = provider.verifyWebhook({ rawBody, signature });
   const eventId = payload.id || payload.event_id || payload.created_at && `${payload.event}:${payload.created_at}`;
   const existing = eventId ? await PaymentWebhook.findOne({ eventId }) : null;
-  if (existing) return { webhook: existing, duplicate: true, verified: existing.verified };
+  if (existing?.verified) return { webhook: existing, duplicate: true, verified: true };
+  if (existing && !verified) {
+    return { webhook: existing, duplicate: true, verified: false };
+  }
 
-  const webhook = await PaymentWebhook.create({ eventId, event: payload.event || 'unknown', payload, signature, verified, processedAt: new Date() });
+  let webhook = existing;
+  if (!webhook) {
+    webhook = await PaymentWebhook.create({ eventId, event: payload.event || 'unknown', payload, signature, verified, processedAt: new Date() });
+  } else {
+    webhook.signature = signature;
+    webhook.verified = verified;
+    webhook.payload = payload;
+    webhook.processedAt = new Date();
+    webhook.processingError = null;
+    await webhook.save();
+  }
   if (!verified) {
     webhook.processingError = 'Invalid Razorpay webhook signature';
     await webhook.save();
@@ -363,5 +536,7 @@ module.exports = {
   processWebhook,
   refundPayment,
   verifyRazorpaySignature,
-  verifyWebhookSignature
+  verifyWebhookSignature,
+  resolveRouteSettlement,
+  buildRouteTransfers
 };

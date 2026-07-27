@@ -1359,7 +1359,7 @@ export const apiService = {
     return response.data;
   },
 
-  createBooking: async (authToken: string, payload: { routeId: string; seats?: string[]; passengerType?: string; couponCode?: string; paymentMethod?: 'wallet' | 'gateway' | 'wallet_gateway'; idempotencyKey?: string }): Promise<{ bookingId: string; pricing: { totalAmount: number; fare: number; discount: number }; balance: number | null; paymentRequired?: boolean; tickets: TicketItem[] }> => {
+  createBooking: async (authToken: string, payload: { routeId: string; seats?: string[]; passengerType?: string; couponCode?: string; paymentMethod?: 'wallet' | 'gateway' | 'wallet_gateway'; idempotencyKey?: string }): Promise<{ bookingId: string; pricing: { totalAmount: number; fare: number; discount: number }; balance: number | null; paymentRequired?: boolean; lifecycle?: string; tickets: TicketItem[] }> => {
     const response = await api.post('/bookings', payload, authHeaders(authToken));
     return response.data;
   },

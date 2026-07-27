@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowRightLeft,
@@ -45,6 +45,7 @@ import { formatCurrency, formatDateTime } from '@/lib/format';
 import { useAppRole } from '@/lib/useAppRole';
 import { isCustomerRole } from '@/lib/roles';
 import { RouteMap } from '@/components/maps/MapView';
+import { openHostedCheckout } from '@/lib/razorpayCheckout';
 
 type CustomerData = {
   balance: number;
@@ -56,10 +57,6 @@ type CustomerData = {
   notifications: NotificationItem[];
   posts: PostItem[];
   support: SupportTicketItem[];
-};
-
-type RazorpayWindow = Window & {
-  Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
 };
 
 const city = 'Hyderabad';
@@ -400,6 +397,7 @@ export function CustomerDashboardPageContent() {
 
 export function CustomerBookingPageContent() {
   const { isLoaded, user, getToken } = useAppRole();
+  const router = useRouter();
   const [routes, setRoutes] = useState<RouteItem[]>([]);
   const [stops, setStops] = useState<StopItem[]>([]);
   const [from, setFrom] = useState('');
@@ -412,6 +410,8 @@ export function CustomerBookingPageContent() {
   const [walletAmount, setWalletAmount] = useState('0');
   const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState<string | null>(null);
+  const [paying, setPaying] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -442,21 +442,57 @@ export function CustomerBookingPageContent() {
 
   const submitBooking = async () => {
     if (!selected) return;
+    setPaying(true);
+    setConfirmed(false);
     try {
       const token = await getToken();
       if (!token) throw new Error('Missing Clerk token');
+      const walletUse = Number(walletAmount) || 0;
       const response = await apiService.createBooking(token, {
         routeId: selected._id,
         passengerType: 'adult',
         couponCode: coupon || undefined,
-        paymentMethod: Number(walletAmount) > 0 ? 'wallet_gateway' : 'gateway',
+        paymentMethod: walletUse > 0 ? 'wallet_gateway' : 'gateway',
         seats: Array.from({ length: passengers }, (_, index) => `A${index + 1}`),
         idempotencyKey: `web-${selected._id}-${Date.now()}`
       });
       setBooking(response.bookingId);
-      toast.success('Seat hold created. Continue payment from Payments if required.');
-    } catch {
-      toast.error('Unable to create booking');
+
+      if (!response.paymentRequired && response.lifecycle === 'completed') {
+        setConfirmed(true);
+        toast.success('Booking confirmed');
+        return;
+      }
+
+      const order = await apiService.createPaymentOrder(token, {
+        bookingId: response.bookingId,
+        walletAmount: walletUse > 0 ? walletUse : undefined,
+        paymentMethod: walletUse > 0 ? 'wallet_gateway' : 'gateway',
+        coupon: coupon || undefined
+      });
+
+      toast.success('Opening Razorpay Hosted Checkout…');
+      await openHostedCheckout({
+        order,
+        name: 'BusQR',
+        description: `Booking ${response.bookingId}`,
+        prefill: { email: user?.primaryEmailAddress?.emailAddress || undefined, name: user?.fullName || undefined },
+        onSuccess: async (payment) => {
+          await apiService.verifyPayment(token, {
+            razorpay_payment_id: payment.razorpay_payment_id,
+            razorpay_order_id: payment.razorpay_order_id,
+            razorpay_signature: payment.razorpay_signature
+          });
+          setConfirmed(true);
+          toast.success('Payment captured — booking confirmed');
+          router.push(`/bookings/${response.bookingId}?paid=1`);
+        },
+        onDismiss: () => toast('Checkout closed — booking held until payment completes')
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to complete booking payment');
+    } finally {
+      setPaying(false);
     }
   };
 
@@ -534,8 +570,11 @@ export function CustomerBookingPageContent() {
                   <p className="flex justify-between"><span>Coupon</span><input value={coupon} onChange={(e) => setCoupon(e.target.value.toUpperCase())} placeholder="CODE" className="w-28 rounded-lg border border-zinc-200 px-2 py-1 text-right" /></p>
                   <p className="flex justify-between"><span>Wallet usage</span><input value={walletAmount} onChange={(e) => setWalletAmount(e.target.value)} className="w-28 rounded-lg border border-zinc-200 px-2 py-1 text-right" /></p>
                 </div>
-                <ActionButton className="mt-4 w-full" onClick={() => void submitBooking()}>Hold seats and continue payment</ActionButton>
+                <ActionButton className="mt-4 w-full" disabled={paying} onClick={() => void submitBooking()}>
+                  {paying ? 'Opening checkout…' : 'Hold seats and pay with Razorpay'}
+                </ActionButton>
                 {booking ? <p className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">Booking hold created: {booking}</p> : null}
+                {confirmed ? <p className="mt-3 rounded-xl bg-emerald-100 p-3 text-sm font-medium text-emerald-800">Payment captured — confirmation ready.</p> : null}
               </>
             ) : <p className="mt-3 text-sm text-zinc-500">Select a bus to view seats, driver, conductor, pickup/drop points, fare breakup, and payment.</p>}
           </div>
@@ -579,9 +618,12 @@ export function CustomerBookingsPageContent() {
 
 export function CustomerBookingDetailPageContent() {
   const params = useParams<{ id: string }>();
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   const { isLoaded, user, getToken } = useAppRole();
   const [booking, setBooking] = useState<BookingSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [paying, setPaying] = useState(false);
+  const paidFlag = searchParams?.get('paid') === '1';
 
   useEffect(() => {
     const load = async () => {
@@ -606,6 +648,37 @@ export function CustomerBookingDetailPageContent() {
     };
     void load();
   }, [getToken, isLoaded, params.id, user]);
+
+  const payNow = async () => {
+    if (!booking) return;
+    setPaying(true);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error('Missing Clerk token');
+      const order = await apiService.createPaymentOrder(token, {
+        bookingId: booking.bookingId,
+        paymentMethod: 'gateway'
+      });
+      await openHostedCheckout({
+        order,
+        name: 'BusQR',
+        description: `Booking ${booking.bookingId}`,
+        onSuccess: async (payment) => {
+          await apiService.verifyPayment(token, {
+            razorpay_payment_id: payment.razorpay_payment_id,
+            razorpay_order_id: payment.razorpay_order_id,
+            razorpay_signature: payment.razorpay_signature
+          });
+          toast.success('Payment confirmed');
+          window.location.href = `/bookings/${booking.bookingId}?paid=1`;
+        }
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to start payment');
+    } finally {
+      setPaying(false);
+    }
+  };
 
   const firstTicket = booking?.tickets[0];
   const ticketRoute = firstTicket ? {
@@ -635,6 +708,16 @@ export function CustomerBookingDetailPageContent() {
               </div>
               <span className={`rounded-full px-3 py-1 text-xs ${statusClass(booking.status)}`}>{booking.status}</span>
             </div>
+            {(paidFlag || booking.status === 'ACTIVE') ? (
+              <p className="mt-4 rounded-2xl bg-emerald-50 p-3 text-sm font-medium text-emerald-800" role="status">
+                Booking confirmed. Tickets are active — show your QR at boarding.
+              </p>
+            ) : null}
+            {booking.status === 'HELD' ? (
+              <ActionButton className="mt-4" disabled={paying} onClick={() => void payNow()}>
+                {paying ? 'Opening Razorpay…' : 'Pay with Razorpay Hosted Checkout'}
+              </ActionButton>
+            ) : null}
           </section>
           <section className="grid gap-4 lg:grid-cols-[1fr_420px]">
             <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
@@ -698,33 +781,16 @@ export function CustomerWalletPageContent() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const loadRazorpay = () => new Promise<boolean>((resolve) => {
-    if (typeof window === 'undefined') return resolve(false);
-    if ((window as RazorpayWindow).Razorpay) return resolve(true);
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-
   const recharge = async () => {
     try {
       const token = await getToken();
       if (!token) throw new Error('Missing Clerk token');
-      const ready = await loadRazorpay();
-      if (!ready) throw new Error('Razorpay checkout unavailable');
       const response = await apiService.createPaymentOrder(token, { amount: Number(amount), paymentMethod: 'gateway' });
-      const Razorpay = (window as RazorpayWindow).Razorpay;
-      if (!Razorpay) throw new Error('Razorpay checkout unavailable');
-      const checkout = new Razorpay({
-        key: response.keyId,
-        amount: response.order.amount,
-        currency: response.order.currency,
+      await openHostedCheckout({
+        order: response,
         name: 'BusQR Wallet',
         description: 'Wallet recharge',
-        order_id: response.order.id,
-        handler: async (payment: Record<string, string>) => {
+        onSuccess: async (payment) => {
           await apiService.verifyPayment(token, {
             razorpay_payment_id: payment.razorpay_payment_id,
             razorpay_order_id: payment.razorpay_order_id,
@@ -734,7 +800,6 @@ export function CustomerWalletPageContent() {
           await load();
         }
       });
-      checkout.open();
     } catch {
       toast.error('Unable to start Razorpay recharge');
     }

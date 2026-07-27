@@ -107,6 +107,53 @@ describe('Sprint 4 pricing, wallet, and payment foundations', () => {
     expect(provider.paymentStatus({ status: 'captured' })).toBe('captured');
   });
 
+  test('Route transfer payload uses linked account and order amount in paise', () => {
+    const { buildRouteTransfers } = require('../services/paymentService');
+    const transfers = buildRouteTransfers({
+      linkedAccountId: 'acc_test_linked',
+      amountPaise: 25000,
+      currency: 'INR',
+      organizationId,
+      bookingId: 'BK-ROUTE-1'
+    });
+    expect(transfers).toHaveLength(1);
+    expect(transfers[0]).toMatchObject({
+      account: 'acc_test_linked',
+      amount: 25000,
+      currency: 'INR',
+      on_hold: false
+    });
+  });
+
+  test('Payment model defaults routeSettlement to platform_fallback', async () => {
+    const payment = new Payment({
+      organizationId,
+      userId,
+      razorpayOrderId: 'order_route_default',
+      amount: 100
+    });
+    await expect(payment.validate()).resolves.toBeUndefined();
+    expect(payment.routeSettlement).toBe('platform_fallback');
+  });
+
+  test('Organization razorpayRoute accepts active linked account binding', async () => {
+    const Organization = require('../models/Organization');
+    const org = new Organization({
+      name: 'Route Org',
+      slug: `route-org-${Date.now()}`,
+      ownerUserId: userId,
+      status: 'active',
+      razorpayRoute: {
+        linkedAccountId: 'acc_test_123',
+        status: 'active',
+        onboardedAt: new Date()
+      }
+    });
+    await expect(org.validate()).resolves.toBeUndefined();
+    expect(org.razorpayRoute.linkedAccountId).toBe('acc_test_123');
+    expect(org.razorpayRoute.status).toBe('active');
+  });
+
   test('Payment webhook stores idempotency event identifier', async () => {
     const webhook = new PaymentWebhook({
       eventId: 'evt_123',

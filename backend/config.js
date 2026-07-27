@@ -54,11 +54,23 @@ const config = {
 
 function validateConfig(current = config) {
   const errors = [];
+  const production = current.NODE_ENV === 'production';
   if (!ENVIRONMENTS.includes(current.NODE_ENV)) errors.push(`NODE_ENV must be one of ${ENVIRONMENTS.join(', ')}`);
   if (!current.PORT || current.PORT < 1) errors.push('PORT must be a positive number');
   if (!current.MONGO_URI) errors.push('MONGO_URI is required');
-  if (isProduction && !current.FRONTEND_URL) errors.push('FRONTEND_URL is required in production');
-  if (isProduction && current.CORS_ORIGINS.length === 0) errors.push('CORS_ORIGINS is required in production');
+  if (production && !current.FRONTEND_URL) errors.push('FRONTEND_URL is required in production');
+  if (production && current.CORS_ORIGINS.length === 0) errors.push('CORS_ORIGINS is required in production');
+  if (production && !process.env.CLERK_SECRET_KEY && !process.env.CLERK_JWKS_URL) {
+    errors.push('CLERK_SECRET_KEY or CLERK_JWKS_URL is required in production');
+  }
+  if (production && !process.env.RAZORPAY_KEY_ID) errors.push('RAZORPAY_KEY_ID is required in production');
+  if (production && !process.env.RAZORPAY_KEY_SECRET) errors.push('RAZORPAY_KEY_SECRET is required in production');
+  if (production && !process.env.RAZORPAY_WEBHOOK_SECRET) {
+    errors.push('RAZORPAY_WEBHOOK_SECRET is required in production');
+  }
+  if (production && !process.env.CLERK_WEBHOOK_SECRET) {
+    errors.push('CLERK_WEBHOOK_SECRET is required in production');
+  }
   if (errors.length) {
     const error = new Error(`Invalid configuration: ${errors.join('; ')}`);
     error.code = 'CONFIG_VALIDATION_FAILED';

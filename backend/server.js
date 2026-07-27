@@ -28,6 +28,7 @@ const reportingRoutes = require('./routes/reportingRoutes');
 const postRoutes = require('./routes/postRoutes');
 const supportRoutes = require('./routes/supportRoutes');
 const systemRoutes = require('./routes/systemRoutes');
+const webhookRoutes = require('./routes/webhookRoutes');
 
 // Import middleware
 const { orgContextMiddleware } = require('./middleware/permissions');
@@ -50,6 +51,10 @@ app.use(rateLimiter);
 app.use(apiVersion);
 app.use(orgContextMiddleware());
 jobService.registerDefaultJobs();
+if (config.FEATURE_FLAGS.jobs && config.NODE_ENV !== 'test') {
+  const scheduled = jobService.startScheduledJobs();
+  logger.scheduler('scheduled_jobs_boot', scheduled);
+}
 
 // Connect to MongoDB
 mongoose
@@ -84,6 +89,7 @@ function mountApi(prefix) {
   app.use(prefix, reportingRoutes);
   app.use(prefix, postRoutes);
   app.use(prefix, supportRoutes);
+  app.use(prefix, webhookRoutes);
 }
 
 // Mount all routes under legacy and versioned API prefixes.

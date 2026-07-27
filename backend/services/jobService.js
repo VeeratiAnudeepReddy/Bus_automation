@@ -2,6 +2,8 @@ const JobHistory = require('../models/JobHistory');
 const logger = require('../utils/logger');
 
 const jobs = new Map();
+const timers = new Map();
+const DEFAULT_EXPIRY_INTERVAL_MS = 60_000;
 
 function registerJob(name, handler, options = {}) {
   jobs.set(name, { name, handler, options });
@@ -33,23 +35,66 @@ function registerDefaultJobs() {
   registerJob('ticket_expiration', async () => {
     const { expireSeatLocksAndPayments } = require('./bookingIntegrityService');
     return expireSeatLocksAndPayments();
-  });
-  registerJob('wallet_reconciliation', async () => ({ reconciled: 0 }));
-  registerJob('payment_verification', async () => ({ verified: 0 }));
-  registerJob('notification_retry', async () => ({ retried: 0 }));
-  registerJob('report_generation', async () => ({ generated: 0 }));
+  }, { intervalMs: DEFAULT_EXPIRY_INTERVAL_MS, implemented: true });
+  registerJob('wallet_reconciliation', async () => ({ reconciled: 0, stub: true }), { implemented: false });
+  registerJob('payment_verification', async () => ({ verified: 0, stub: true }), { implemented: false });
+  registerJob('notification_retry', async () => ({ retried: 0, stub: true }), { implemented: false });
+  registerJob('report_generation', async () => ({ generated: 0, stub: true }), { implemented: false });
   registerJob('cleanup', async () => {
     const { expireSeatLocksAndPayments } = require('./bookingIntegrityService');
     return expireSeatLocksAndPayments();
-  });
-  registerJob('expired_invite_cleanup', async () => ({ expired: 0 }));
-  registerJob('audit_archival', async () => ({ archived: 0 }));
-  registerJob('daily_summary', async () => ({ sent: 0 }));
-  registerJob('monthly_report', async () => ({ generated: 0 }));
+  }, { intervalMs: 5 * DEFAULT_EXPIRY_INTERVAL_MS, implemented: true });
+  registerJob('expired_invite_cleanup', async () => ({ expired: 0, stub: true }), { implemented: false });
+  registerJob('audit_archival', async () => ({ archived: 0, stub: true }), { implemented: false });
+  registerJob('daily_summary', async () => ({ sent: 0, stub: true }), { implemented: false });
+  registerJob('monthly_report', async () => ({ generated: 0, stub: true }), { implemented: false });
 }
 
 function listJobs() {
-  return [...jobs.values()].map(({ name, options }) => ({ name, options }));
+  return [...jobs.values()].map(({ name, options }) => ({
+    name,
+    options,
+    scheduled: timers.has(name),
+    implemented: options?.implemented !== false
+  }));
 }
 
-module.exports = { registerJob, runJob, registerDefaultJobs, listJobs };
+/**
+ * Start in-process intervals for jobs that declare intervalMs.
+ * Disabled in test env to avoid open handles / side effects.
+ */
+function startScheduledJobs({ enabled = process.env.NODE_ENV !== 'test' } = {}) {
+  if (!enabled) return { started: [] };
+  const started = [];
+  for (const [name, job] of jobs.entries()) {
+    const intervalMs = Number(job.options?.intervalMs || 0);
+    if (!intervalMs || timers.has(name)) continue;
+    const timer = setInterval(() => {
+      runJob(name, { trigger: 'interval' }).catch((error) => {
+        logger.scheduler('job_interval_error', { name, error: error.message });
+      });
+    }, intervalMs);
+    if (typeof timer.unref === 'function') timer.unref();
+    timers.set(name, timer);
+    started.push(name);
+    logger.scheduler('job_scheduled', { name, intervalMs });
+  }
+  return { started };
+}
+
+function stopScheduledJobs() {
+  for (const [name, timer] of timers.entries()) {
+    clearInterval(timer);
+    timers.delete(name);
+    logger.scheduler('job_unscheduled', { name });
+  }
+}
+
+module.exports = {
+  registerJob,
+  runJob,
+  registerDefaultJobs,
+  listJobs,
+  startScheduledJobs,
+  stopScheduledJobs
+};

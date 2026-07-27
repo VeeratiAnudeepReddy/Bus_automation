@@ -5,12 +5,14 @@ const config = require('../config');
 const User = require('../models/User');
 const Ticket = require('../models/Ticket');
 const Route = require('../models/Route');
+const ValidationLog = require('../models/ValidationLog');
 const { resolveOrganizationId } = require('../utils/defaultOrganization');
 const { calculateFare } = require('../services/pricingService');
 const { recordWalletTransaction } = require('../services/walletService');
 const BookingHistory = require('../models/BookingHistory');
 const Invoice = require('../models/Invoice');
 const Receipt = require('../models/Receipt');
+const logger = require('../utils/logger');
 
 const TICKET_PRICE = Number(config.FARE) || 20;
 const MAX_TICKETS_PER_BOOKING = 20;
@@ -300,6 +302,14 @@ exports.getMyTickets = async (req, res) => {
   }
 };
 
+async function recordValidationLog({ ticketId, userId = null, status, scannedAt = new Date() }) {
+  try {
+    await ValidationLog.create({ ticketId, userId, status, scannedAt });
+  } catch (error) {
+    logger.error('validation_log_write_failed', { ticketId, status, error: error.message });
+  }
+}
+
 exports.scanTicket = async (req, res) => {
   try {
     const ticketId = parseTicketIdFromScan(req.body.scannedData);
@@ -328,6 +338,12 @@ exports.scanTicket = async (req, res) => {
     ).lean();
 
     if (updated) {
+      await recordValidationLog({
+        ticketId,
+        userId: updated.userId,
+        status: 'VALID',
+        scannedAt
+      });
       const ticketUser = await User.findById(updated.userId).select('name').lean();
       return res.status(200).json({
         result: 'VALID',
@@ -338,11 +354,18 @@ exports.scanTicket = async (req, res) => {
       });
     }
 
-    const existing = await Ticket.findOne({ ticketId }).select('status').lean();
+    const existing = await Ticket.findOne({ ticketId }).select('status userId').lean();
     if (!existing) {
+      await recordValidationLog({ ticketId, status: 'INVALID', scannedAt });
       return res.status(200).json({ result: 'INVALID' });
     }
 
+    await recordValidationLog({
+      ticketId,
+      userId: existing.userId,
+      status: 'ALREADY_USED',
+      scannedAt
+    });
     return res.status(200).json({ result: 'REJECT' });
   } catch (error) {
     console.error('Scan ticket error:', error.message);

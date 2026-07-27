@@ -13,7 +13,19 @@ function securityHeaders(req, res, next) {
 
 function corsOptions(req, callback) {
   const origin = req.header('Origin');
-  if (!origin || config.CORS_ORIGINS.includes(origin) || config.NODE_ENV !== 'production') {
+  // Dev/test: allow configured origins or missing Origin (curl/server-to-server).
+  // Production: only exact allowlist — never reflect arbitrary Origin.
+  if (config.NODE_ENV === 'production') {
+    if (origin && config.CORS_ORIGINS.includes(origin)) {
+      return callback(null, { origin, credentials: true });
+    }
+    if (!origin) {
+      return callback(null, { origin: false });
+    }
+    logger.security('cors_rejected', { origin, route: req.originalUrl });
+    return callback(null, { origin: false });
+  }
+  if (!origin || config.CORS_ORIGINS.includes(origin)) {
     return callback(null, { origin: origin || true, credentials: true });
   }
   logger.security('cors_rejected', { origin, route: req.originalUrl });

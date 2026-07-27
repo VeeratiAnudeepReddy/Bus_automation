@@ -40,8 +40,8 @@ NEXT_PUBLIC_API_URL=http://localhost:5001/api
 NEXT_PUBLIC_FARE=10
 
 # Clerk Authentication Keys
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_Z3Jvd2luZy1oeWVuYS0xNS5jbGVyay5hY2NvdW50cy5kZXYk
-CLERK_SECRET_KEY=sk_test_HZfzOVTdGz36fwJFIb748AcoJF2WuWXlPfd4JknE7w
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_YOUR_PUBLISHABLE_KEY
+CLERK_SECRET_KEY=sk_test_REDACTED_ROTATE_IMMEDIATELY
 
 # Clerk URL Configuration (optional)
 NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
@@ -65,7 +65,7 @@ Same as .env.local - contains the real Clerk publishable and secret keys.
 
 **What this means:**
 - `.env` files will NOT be committed to git
-- The Clerk secret key `sk_test_HZfzOVTdGz36fwJFIb748AcoJF2WuWXlPfd4JknE7w` is safe
+- The Clerk secret key `sk_test_REDACTED_ROTATE_IMMEDIATELY` is safe
 - The publishable key is also protected
 
 ---
@@ -77,7 +77,7 @@ Same as .env.local - contains the real Clerk publishable and secret keys.
 
 ```
 # MongoDB Configuration
-MONGO_URI=mongodb+srv://anudeep:Anudeep%404091@busticket.mwvyuly.mongodb.net/busticket?retryWrites=true&w=majority
+MONGO_URI=mongodb+srv://USER:PASSWORD@cluster.example.mongodb.net/dbname
 
 # Server Configuration
 PORT=5001
@@ -86,7 +86,7 @@ PORT=5001
 FARE=10
 
 # Authentication
-CLERK_SECRET_KEY=sk_test_HZfzOVTdGz36fwJFIb748AcoJF2WuWXlPfd4JknE7w
+CLERK_SECRET_KEY=sk_test_REDACTED_ROTATE_IMMEDIATELY
 
 # Frontend URL (used for invite links in email)
 FRONTEND_URL=http://localhost:3000
@@ -97,7 +97,7 @@ FRONTEND_URL=http://localhost:3000
 
 ```
 # MongoDB Configuration
-MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/dbname?retryWrites=true&w=majority
+MONGO_URI=mongodb+srv://USER:PASSWORD@cluster.example.mongodb.net/dbname
 
 # Server Configuration
 PORT=5001
@@ -116,7 +116,7 @@ FRONTEND_URL=http://localhost:3000
 **Variables read:**
 ```javascript
 module.exports = {
-  MONGO_URI: process.env.MONGO_URI || "mongodb+srv://...",
+  MONGO_URI: process.env.MONGO_URI || "mongodb+srv://USER:PASSWORD@cluster.example.mongodb.net/dbname",
   PORT: process.env.PORT || 5001,
   FARE: process.env.FARE || 20
 };
@@ -215,7 +215,7 @@ The API base URL is **configurable** via `NEXT_PUBLIC_API_URL` environment varia
 ### Backend (Server-side only)
 | Variable | Current Value | Purpose |
 |----------|---------------|---------|
-| MONGO_URI | mongodb+srv://anudeep:... | Database connection string |
+| MONGO_URI | mongodb+srv://USER:PASSWORD@cluster.example.mongodb.net/dbname | Database connection string |
 | PORT | 5001 | Server port |
 | FARE | 10 | Base fare amount (₹) |
 | CLERK_SECRET_KEY | sk_test_HZfz... | Secret for token verification |
@@ -275,7 +275,7 @@ npm run dev
 
 ### If MongoDB Connection Fails
 The backend error "querySrv ENOTFOUND" is expected if the MongoDB cloud instance is not reachable. In production:
-- Ensure network access to mongodb+srv://busticket.mwvyuly.mongodb.net is allowed
+- Ensure network access to mongodb+srv://USER:PASSWORD@cluster.example.mongodb.net/dbname is allowed
 - Check firewall rules allow outbound connections to MongoDB Atlas
 - Verify MongoDB credentials are correct
 
